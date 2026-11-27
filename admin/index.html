@@ -311,33 +311,39 @@
         </div>
 
         <div class="subcard">
-          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Payment Numbers &amp; Mode (Send Money / Cash Out)</div>
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Payment Numbers, Mode &amp; Deposit Instructions</div>
           <div class="field-group">
-            <label class="field-label">bKash Number</label>
+            <label class="field-label">bKash Number &amp; Mode</label>
             <input type="text" id="bkashInput" class="input-control" style="margin-bottom:6px;" />
-            <select id="bkashModeSelect" class="input-control">
+            <select id="bkashModeSelect" class="input-control" style="margin-bottom:6px;">
               <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
               <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
               <option value="Send Money / Cash Out">Send Money / Cash Out</option>
             </select>
+            <label class="field-label" style="margin-top:4px;">bKash Deposit Instruction (পুরো মেসেজ এডিট করা যাবে)</label>
+            <textarea id="bkashInstructionInput" class="input-control" rows="2" placeholder="যেমন: অফিসিয়াল বিকাশ নম্বর (Cash Out) • ন্যূনতম ডিপোজিট: ৳2000..."></textarea>
           </div>
           <div class="field-group">
-            <label class="field-label">Nagad Number</label>
+            <label class="field-label">Nagad Number &amp; Mode</label>
             <input type="text" id="nagadInput" class="input-control" style="margin-bottom:6px;" />
-            <select id="nagadModeSelect" class="input-control">
+            <select id="nagadModeSelect" class="input-control" style="margin-bottom:6px;">
               <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
               <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
               <option value="Send Money / Cash Out">Send Money / Cash Out</option>
             </select>
+            <label class="field-label" style="margin-top:4px;">Nagad Deposit Instruction</label>
+            <textarea id="nagadInstructionInput" class="input-control" rows="2" placeholder="যেমন: অফিসিয়াল নগদ নম্বর (Cash Out) • ন্যূনতম ডিপোজিট: ৳2000..."></textarea>
           </div>
           <div class="field-group">
-            <label class="field-label">Rocket Number</label>
+            <label class="field-label">Rocket Number &amp; Mode</label>
             <input type="text" id="rocketInput" class="input-control" style="margin-bottom:6px;" />
-            <select id="rocketModeSelect" class="input-control">
+            <select id="rocketModeSelect" class="input-control" style="margin-bottom:6px;">
               <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
               <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
               <option value="Send Money / Cash Out">Send Money / Cash Out</option>
             </select>
+            <label class="field-label" style="margin-top:4px;">Rocket Deposit Instruction</label>
+            <textarea id="rocketInstructionInput" class="input-control" rows="2" placeholder="যেমন: অফিসিয়াল রকেট নম্বর (Cash Out) • ন্যূনতম ডিপোজিট: ৳2000..."></textarea>
           </div>
         </div>
 
@@ -403,7 +409,12 @@
         minDeposit: 200,
         minWithdraw: 500,
         paymentNumbers: { bkash: "01712345678", nagad: "01812345678", rocket: "01912345678" },
-        paymentModes: { bkash: "Send Money / Cash Out", nagad: "Send Money / Cash Out", rocket: "Send Money / Cash Out" }
+        paymentModes: { bkash: "Send Money / Cash Out", nagad: "Send Money / Cash Out", rocket: "Send Money / Cash Out" },
+        depositInstructions: {
+          bkash: "",
+          nagad: "",
+          rocket: ""
+        }
       },
       partners: {
         slot1: { name: "1X", url: "https://1xbet.com", logoDataUrl: "" },
@@ -449,7 +460,8 @@
               ...state.settings,
               ...(parsed.settings || {}),
               paymentNumbers: { ...state.settings.paymentNumbers, ...((parsed.settings && parsed.settings.paymentNumbers) || {}) },
-              paymentModes: { ...state.settings.paymentModes, ...((parsed.settings && parsed.settings.paymentModes) || {}) }
+              paymentModes: { ...state.settings.paymentModes, ...((parsed.settings && parsed.settings.paymentModes) || {}) },
+              depositInstructions: { ...state.settings.depositInstructions, ...((parsed.settings && parsed.settings.depositInstructions) || {}) }
             },
             partners: {
               slot1: { ...state.partners.slot1, ...((parsed.partners && parsed.partners.slot1) || {}) },
@@ -484,7 +496,8 @@
               ...state.settings,
               ...cfg.settings,
               paymentNumbers: { ...state.settings.paymentNumbers, ...(cfg.settings.paymentNumbers || {}) },
-              paymentModes: { ...state.settings.paymentModes, ...(cfg.settings.paymentModes || {}) }
+              paymentModes: { ...state.settings.paymentModes, ...(cfg.settings.paymentModes || {}) },
+              depositInstructions: { ...state.settings.depositInstructions, ...(cfg.settings.depositInstructions || {}) }
             };
           }
           if (cfg.partners) {
@@ -500,7 +513,7 @@
           if (Array.isArray(cfg.deposits)) state.deposits = cfg.deposits;
           if (Array.isArray(cfg.registeredUsers)) state.registeredUsers = cfg.registeredUsers;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-          if (unlocked) renderConsole();
+          if (unlocked && !isUserEditingSettings()) renderConsole();
         }
       } catch (e) {}
     }
@@ -678,13 +691,19 @@
       state.settings.paymentNumbers.bkash = document.getElementById("bkashInput").value.trim();
       state.settings.paymentNumbers.nagad = document.getElementById("nagadInput").value.trim();
       state.settings.paymentNumbers.rocket = document.getElementById("rocketInput").value.trim();
+      if (!state.settings.paymentModes) state.settings.paymentModes = {};
+      if (!state.settings.depositInstructions) state.settings.depositInstructions = {};
       state.settings.paymentModes.bkash = document.getElementById("bkashModeSelect").value;
       state.settings.paymentModes.nagad = document.getElementById("nagadModeSelect").value;
       state.settings.paymentModes.rocket = document.getElementById("rocketModeSelect").value;
+      state.settings.depositInstructions.bkash = document.getElementById("bkashInstructionInput").value;
+      state.settings.depositInstructions.nagad = document.getElementById("nagadInstructionInput").value;
+      state.settings.depositInstructions.rocket = document.getElementById("rocketInstructionInput").value;
       state.support.whatsapp = document.getElementById("supportWaInput").value.trim();
       state.support.telegram = document.getElementById("supportTgInput").value.trim();
       state.support.hours = document.getElementById("supportHoursInput").value.trim() || "24/7 Live Agent";
 
+      settingsDirty = false;
       await pushSupabase();
       showToast("সব সেটিংস সংরক্ষণ ও সিঙ্ক হয়েছে");
     }
@@ -741,6 +760,27 @@
       renderConsole();
       showToast(ok ? "KYC Approved" : "KYC Rejected");
     }
+
+    let settingsDirty = false;
+    function isUserEditingSettings() {
+      const panel = document.getElementById("panelSettings");
+      const active = document.activeElement;
+      if (settingsDirty) return true;
+      if (panel && panel.style.display !== "none" && active && panel.contains(active)) {
+        const tag = (active.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "select" || tag === "textarea") return true;
+      }
+      return false;
+    }
+
+    document.addEventListener("input", e => {
+      const panel = document.getElementById("panelSettings");
+      if (panel && e.target && panel.contains(e.target)) settingsDirty = true;
+    });
+    document.addEventListener("change", e => {
+      const panel = document.getElementById("panelSettings");
+      if (panel && e.target && panel.contains(e.target)) settingsDirty = true;
+    });
 
     function renderConsole() {
       const depEl = document.getElementById("depositList");
@@ -810,9 +850,14 @@
       document.getElementById("bkashInput").value = state.settings.paymentNumbers.bkash;
       document.getElementById("nagadInput").value = state.settings.paymentNumbers.nagad;
       document.getElementById("rocketInput").value = state.settings.paymentNumbers.rocket;
-      if (document.getElementById("bkashModeSelect")) document.getElementById("bkashModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.bkash) || "Send Money / Cash Out";
-      if (document.getElementById("nagadModeSelect")) document.getElementById("nagadModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.nagad) || "Send Money / Cash Out";
-      if (document.getElementById("rocketModeSelect")) document.getElementById("rocketModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.rocket) || "Send Money / Cash Out";
+      if (!isUserEditingSettings()) {
+        if (document.getElementById("bkashModeSelect")) document.getElementById("bkashModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.bkash) || "Send Money / Cash Out";
+        if (document.getElementById("nagadModeSelect")) document.getElementById("nagadModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.nagad) || "Send Money / Cash Out";
+        if (document.getElementById("rocketModeSelect")) document.getElementById("rocketModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.rocket) || "Send Money / Cash Out";
+        if (document.getElementById("bkashInstructionInput")) document.getElementById("bkashInstructionInput").value = (state.settings.depositInstructions && state.settings.depositInstructions.bkash) || "";
+        if (document.getElementById("nagadInstructionInput")) document.getElementById("nagadInstructionInput").value = (state.settings.depositInstructions && state.settings.depositInstructions.nagad) || "";
+        if (document.getElementById("rocketInstructionInput")) document.getElementById("rocketInstructionInput").value = (state.settings.depositInstructions && state.settings.depositInstructions.rocket) || "";
+      }
       document.getElementById("supportWaInput").value = state.support?.whatsapp || "";
       document.getElementById("supportTgInput").value = state.support?.telegram || "";
       document.getElementById("supportHoursInput").value = state.support?.hours || "24/7 Live Agent";
@@ -877,8 +922,8 @@
     readLocal();
     pullSupabase();
     setInterval(() => {
-      if (unlocked) pullSupabase();
-    }, 8000);
+      if (unlocked && !isUserEditingSettings()) pullSupabase();
+    }, 15000);
   </script>
 </body>
 </html>
