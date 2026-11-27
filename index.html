@@ -1221,6 +1221,7 @@
         backPhoto: "",
         selfiePhoto: ""
       },
+      kycByUser: {},
       kycRequests: [],
       gateways: [],
       walletRemovalRequests: [],
@@ -1270,6 +1271,7 @@
           },
           support: { ...structuredClone(defaultState.support), ...(parsed.support || {}) },
           kyc: { ...structuredClone(defaultState.kyc), ...(parsed.kyc || {}) },
+          kycByUser: (parsed.kycByUser && typeof parsed.kycByUser === "object") ? parsed.kycByUser : {},
           kycRequests: Array.isArray(parsed.kycRequests) ? parsed.kycRequests : [],
           gateways: Array.isArray(parsed.gateways) ? parsed.gateways : [],
           walletRemovalRequests: Array.isArray(parsed.walletRemovalRequests) ? parsed.walletRemovalRequests : [],
@@ -1323,12 +1325,8 @@
           const slimState = {
             ...state,
             deposits: (state.deposits || []).map(d => ({ ...d, screenshot: "" })),
-            kyc: {
-              ...(state.kyc || {}),
-              frontPhoto: "",
-              backPhoto: "",
-              selfiePhoto: ""
-            }
+            kyc: createBlankKycForUser(state.user),
+            kycByUser: {}
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(slimState));
         } catch (e2) {}
@@ -1412,7 +1410,22 @@
         if (Array.isArray(cfg.kycRequests)) {
           const myReq = cfg.kycRequests.find(r => String(r.userEmail || "").trim().toLowerCase() === uEmail);
           if (myReq) {
-            state.kyc.status = myReq.status || state.kyc.status;
+            if (!state.kycByUser || typeof state.kycByUser !== "object") state.kycByUser = {};
+            const existingMap = state.kycByUser[uEmail] || {};
+            state.kyc = {
+              ...createBlankKycForUser(state.user),
+              ...existingMap,
+              status: myReq.status || existingMap.status || state.kyc.status,
+              fullName: myReq.fullName || existingMap.fullName || state.kyc.fullName || "",
+              nidNumber: myReq.nidNumber || existingMap.nidNumber || state.kyc.nidNumber || "",
+              dob: myReq.dob || existingMap.dob || state.kyc.dob || "",
+              frontPhoto: myReq.frontPhoto || existingMap.frontPhoto || "",
+              backPhoto: myReq.backPhoto || existingMap.backPhoto || "",
+              selfiePhoto: myReq.selfiePhoto || existingMap.selfiePhoto || "",
+              userEmail: uEmail,
+              userName: myReq.userName || state.user.name || ""
+            };
+            saveCurrentUserKycToMap();
           }
         }
       }
@@ -1663,6 +1676,70 @@
       document.getElementById("registerForm").style.display = isLogin ? "none" : "block";
     }
 
+    function getActiveUserEmailKey() {
+      return (state.user && state.user.email) ? String(state.user.email).trim().toLowerCase() : "";
+    }
+
+    function createBlankKycForUser(userObj) {
+      return {
+        status: "NOT_SUBMITTED",
+        fullName: (userObj && userObj.name) ? userObj.name : "",
+        nidNumber: "",
+        dob: "",
+        frontPhoto: "",
+        backPhoto: "",
+        selfiePhoto: "",
+        userEmail: (userObj && userObj.email) ? String(userObj.email).trim().toLowerCase() : "",
+        userName: (userObj && userObj.name) ? userObj.name : ""
+      };
+    }
+
+    function saveCurrentUserKycToMap() {
+      const em = getActiveUserEmailKey();
+      if (!em) return;
+      if (!state.kycByUser || typeof state.kycByUser !== "object") state.kycByUser = {};
+      state.kyc.userEmail = em;
+      state.kyc.userName = (state.user && state.user.name) ? state.user.name : (state.kyc.fullName || "");
+      state.kycByUser[em] = {
+        status: state.kyc.status || "NOT_SUBMITTED",
+        fullName: state.kyc.fullName || "",
+        nidNumber: state.kyc.nidNumber || "",
+        dob: state.kyc.dob || "",
+        frontPhoto: state.kyc.frontPhoto || "",
+        backPhoto: state.kyc.backPhoto || "",
+        selfiePhoto: state.kyc.selfiePhoto || "",
+        userEmail: em,
+        userName: state.kyc.userName
+      };
+    }
+
+    function loadCurrentUserKycFromMap() {
+      const em = getActiveUserEmailKey();
+      if (!em) {
+        state.kyc = createBlankKycForUser(null);
+        return;
+      }
+      if (!state.kycByUser || typeof state.kycByUser !== "object") state.kycByUser = {};
+      const saved = state.kycByUser[em];
+      const regAcc = (state.registeredUsers || []).find(u => (u.email || "").trim().toLowerCase() === em);
+      const myReq = (state.kycRequests || []).find(r => String(r.userEmail || "").trim().toLowerCase() === em);
+      const base = createBlankKycForUser(state.user);
+      if (saved) {
+        state.kyc = { ...base, ...saved, userEmail: em };
+      } else {
+        state.kyc = base;
+      }
+      const reqStatus = (myReq && myReq.status) || (regAcc && regAcc.kycStatus) || "";
+      if (reqStatus && reqStatus !== "NOT_SUBMITTED") {
+        state.kyc.status = reqStatus;
+        if (myReq) {
+          if (myReq.fullName) state.kyc.fullName = myReq.fullName;
+          if (myReq.nidNumber) state.kyc.nidNumber = myReq.nidNumber;
+          if (myReq.dob) state.kyc.dob = myReq.dob;
+        }
+      }
+    }
+
     function handleLogin(e) {
       e.preventDefault();
       const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
@@ -1697,20 +1774,7 @@
         totalDeposit: Number(matched.totalDeposit) || 0,
         totalWithdraw: Number(matched.totalWithdraw) || 0
       };
-      const matchedEmail = (matched.email || "").trim().toLowerCase();
-      const myKycReq = (state.kycRequests || []).find(r => String(r.userEmail || "").trim().toLowerCase() === matchedEmail);
-      const resolvedKycStatus = (myKycReq && myKycReq.status) || matched.kycStatus || "NOT_SUBMITTED";
-      state.kyc = {
-        status: resolvedKycStatus,
-        fullName: (myKycReq && myKycReq.fullName) || matched.name || "",
-        nidNumber: (myKycReq && myKycReq.nidNumber) || "",
-        dob: (myKycReq && myKycReq.dob) || "",
-        frontPhoto: "",
-        backPhoto: "",
-        selfiePhoto: "",
-        userEmail: matchedEmail,
-        userName: matched.name || ""
-      };
+      loadCurrentUserKycFromMap();
       state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
       showToast("রেজিস্টারকৃত অ্যাকাউন্টে সফলভাবে লগইন হয়েছে!");
@@ -1755,17 +1819,7 @@
         totalDeposit: 0,
         totalWithdraw: 0
       };
-      state.kyc = {
-        status: "NOT_SUBMITTED",
-        fullName: newAcc.name,
-        nidNumber: "",
-        dob: "",
-        frontPhoto: "",
-        backPhoto: "",
-        selfiePhoto: "",
-        userEmail: newAcc.email,
-        userName: newAcc.name
-      };
+      loadCurrentUserKycFromMap();
       state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
       showToast("রেজিস্ট্রেশন সম্পন্ন হয়েছে! এখন এই জিমেইল দিয়ে লগইন করতে পারবেন।");
@@ -1773,8 +1827,10 @@
     }
 
     function logoutUser() {
+      saveCurrentUserKycToMap();
       state.user = null;
       state.sessionExpiresAt = 0;
+      state.kyc = createBlankKycForUser(null);
       saveState();
       showToast("লগআউট করা হয়েছে");
       switchView("landing");
@@ -2289,6 +2345,7 @@
     }
 
     function openKycModal() {
+      loadCurrentUserKycFromMap();
       const k = state.kyc;
       const html = `
         <form onsubmit="submitKycForm(event)">
@@ -2349,12 +2406,13 @@
       if (!file) return;
       readFileAsDataUrl(file, dataUrl => {
         state.kyc[stateKey] = dataUrl;
+        saveCurrentUserKycToMap();
         const img = document.getElementById(imgId);
         if (img) {
           img.src = dataUrl;
           img.style.display = "block";
         }
-        saveState();
+        saveState(true);
       });
     }
 
@@ -2380,6 +2438,7 @@
       }
 
       state.kyc.status = "VERIFIED";
+      saveCurrentUserKycToMap();
       if (Array.isArray(state.registeredUsers) && state.kyc.userEmail) {
         const uAcc = state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === state.kyc.userEmail);
         if (uAcc) uAcc.kycStatus = "VERIFIED";
