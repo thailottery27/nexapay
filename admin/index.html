@@ -311,18 +311,33 @@
         </div>
 
         <div class="subcard">
-          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Payment Numbers</div>
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Payment Numbers &amp; Mode (Send Money / Cash Out)</div>
           <div class="field-group">
             <label class="field-label">bKash Number</label>
-            <input type="text" id="bkashInput" class="input-control" />
+            <input type="text" id="bkashInput" class="input-control" style="margin-bottom:6px;" />
+            <select id="bkashModeSelect" class="input-control">
+              <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
+              <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
+              <option value="Send Money / Cash Out">Send Money / Cash Out</option>
+            </select>
           </div>
           <div class="field-group">
             <label class="field-label">Nagad Number</label>
-            <input type="text" id="nagadInput" class="input-control" />
+            <input type="text" id="nagadInput" class="input-control" style="margin-bottom:6px;" />
+            <select id="nagadModeSelect" class="input-control">
+              <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
+              <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
+              <option value="Send Money / Cash Out">Send Money / Cash Out</option>
+            </select>
           </div>
           <div class="field-group">
             <label class="field-label">Rocket Number</label>
-            <input type="text" id="rocketInput" class="input-control" />
+            <input type="text" id="rocketInput" class="input-control" style="margin-bottom:6px;" />
+            <select id="rocketModeSelect" class="input-control">
+              <option value="Cash Out">Cash Out (এজেন্ট নম্বর)</option>
+              <option value="Send Money">Send Money (পার্সোনাল নম্বর)</option>
+              <option value="Send Money / Cash Out">Send Money / Cash Out</option>
+            </select>
           </div>
         </div>
 
@@ -387,13 +402,15 @@
         agentCommissionRate: 3.5,
         minDeposit: 200,
         minWithdraw: 500,
-        paymentNumbers: { bkash: "01712345678", nagad: "01812345678", rocket: "01912345678" }
+        paymentNumbers: { bkash: "01712345678", nagad: "01812345678", rocket: "01912345678" },
+        paymentModes: { bkash: "Send Money / Cash Out", nagad: "Send Money / Cash Out", rocket: "Send Money / Cash Out" }
       },
       partners: {
         slot1: { name: "1X", url: "https://1xbet.com", logoDataUrl: "" },
         slot2: { name: "CK444", url: "https://ck444.com", logoDataUrl: "" }
       },
       support: { whatsapp: "01712345678", telegram: "https://t.me/nexapaysupport", hours: "24/7 Live Agent" },
+      registeredUsers: [],
       user: null,
       kyc: { status: "NOT_SUBMITTED", fullName: "", nidNumber: "", dob: "", frontPhoto: "", backPhoto: "", selfiePhoto: "" },
       gateways: [],
@@ -431,7 +448,8 @@
             settings: {
               ...state.settings,
               ...(parsed.settings || {}),
-              paymentNumbers: { ...state.settings.paymentNumbers, ...((parsed.settings && parsed.settings.paymentNumbers) || {}) }
+              paymentNumbers: { ...state.settings.paymentNumbers, ...((parsed.settings && parsed.settings.paymentNumbers) || {}) },
+              paymentModes: { ...state.settings.paymentModes, ...((parsed.settings && parsed.settings.paymentModes) || {}) }
             },
             partners: {
               slot1: { ...state.partners.slot1, ...((parsed.partners && parsed.partners.slot1) || {}) },
@@ -460,7 +478,8 @@
             state.settings = {
               ...state.settings,
               ...cfg.settings,
-              paymentNumbers: { ...state.settings.paymentNumbers, ...(cfg.settings.paymentNumbers || {}) }
+              paymentNumbers: { ...state.settings.paymentNumbers, ...(cfg.settings.paymentNumbers || {}) },
+              paymentModes: { ...state.settings.paymentModes, ...(cfg.settings.paymentModes || {}) }
             };
           }
           if (cfg.partners) {
@@ -473,7 +492,8 @@
           if (cfg.kyc && cfg.kyc.status !== "NOT_SUBMITTED") state.kyc = { ...state.kyc, ...cfg.kyc };
           if (Array.isArray(cfg.gateways)) state.gateways = cfg.gateways;
           if (Array.isArray(cfg.walletRemovalRequests)) state.walletRemovalRequests = cfg.walletRemovalRequests;
-          if (Array.isArray(cfg.deposits) && cfg.deposits.length) state.deposits = cfg.deposits;
+          if (Array.isArray(cfg.deposits)) state.deposits = cfg.deposits;
+          if (Array.isArray(cfg.registeredUsers)) state.registeredUsers = cfg.registeredUsers;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           if (unlocked) renderConsole();
         }
@@ -494,7 +514,8 @@
             kyc: state.kyc,
             gateways: state.gateways,
             walletRemovalRequests: state.walletRemovalRequests,
-            deposits: state.deposits
+            deposits: state.deposits,
+            registeredUsers: state.registeredUsers
           },
           updated_at: new Date().toISOString()
         });
@@ -618,6 +639,9 @@
       state.settings.paymentNumbers.bkash = document.getElementById("bkashInput").value.trim();
       state.settings.paymentNumbers.nagad = document.getElementById("nagadInput").value.trim();
       state.settings.paymentNumbers.rocket = document.getElementById("rocketInput").value.trim();
+      state.settings.paymentModes.bkash = document.getElementById("bkashModeSelect").value;
+      state.settings.paymentModes.nagad = document.getElementById("nagadModeSelect").value;
+      state.settings.paymentModes.rocket = document.getElementById("rocketModeSelect").value;
       state.support.whatsapp = document.getElementById("supportWaInput").value.trim();
       state.support.telegram = document.getElementById("supportTgInput").value.trim();
       state.support.hours = document.getElementById("supportHoursInput").value.trim() || "24/7 Live Agent";
@@ -626,19 +650,50 @@
       showToast("সব সেটিংস সংরক্ষণ ও সিঙ্ক হয়েছে");
     }
 
-    function verifyDeposit(id, approve) {
+    async function verifyDeposit(id, approve) {
       const d = state.deposits.find(item => item.id === id);
       if (!d || d.status !== "PENDING") return;
       d.status = approve ? "VERIFIED" : "REJECTED";
-      if (approve && state.user) {
-        state.user.balance = (Number(state.user.balance) || 0) + Number(d.amount);
-        state.user.totalDeposit = (Number(state.user.totalDeposit) || 0) + Number(d.amount);
+      if (approve) {
+        const amt = Number(d.amount) || 0;
+        const targetEmail = (d.userEmail || "").trim().toLowerCase();
+        if (Array.isArray(state.registeredUsers) && state.registeredUsers.length) {
+          let uAcc = targetEmail
+            ? state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === targetEmail)
+            : (state.registeredUsers.length === 1 ? state.registeredUsers[0] : null);
+          if (uAcc) {
+            uAcc.balance = (Number(uAcc.balance) || 0) + amt;
+            uAcc.totalDeposit = (Number(uAcc.totalDeposit) || 0) + amt;
+          }
+        }
+        if (state.user) {
+          state.user.balance = (Number(state.user.balance) || 0) + amt;
+          state.user.totalDeposit = (Number(state.user.totalDeposit) || 0) + amt;
+        }
       }
       const tx = state.transactions.find(t => t.id === id);
       if (tx) tx.status = d.status;
-      pushSupabase();
+      if (sbClient) {
+        try {
+          await sbClient.from("deposit_requests").update({ status: d.status }).eq("id", id);
+        } catch (e) {}
+      }
+      await pushSupabase();
       renderConsole();
       showToast(approve ? "ডিপোজিট ভেরিফাই ও ব্যালেন্স অ্যাড হয়েছে" : "ডিপোজিট বাতিল করা হয়েছে");
+    }
+
+    async function removeTransactionById(id) {
+      state.deposits = (state.deposits || []).filter(item => item.id !== id);
+      state.transactions = (state.transactions || []).filter(t => t.id !== id);
+      if (sbClient) {
+        try {
+          await sbClient.from("deposit_requests").delete().eq("id", id);
+        } catch (e) {}
+      }
+      await pushSupabase();
+      renderConsole();
+      showToast("ট্রানজেকশন রিমুভ করা হয়েছে");
     }
 
     function approveKyc(ok) {
@@ -663,12 +718,13 @@
               <span class="badge ${d.status === "VERIFIED" ? "badge-verified" : d.status === "REJECTED" ? "badge-rejected" : "badge-pending"}">${d.status}</span>
             </div>
             ${d.screenshot ? `<img src="${d.screenshot}" class="preview-img" alt="Screenshot" />` : ""}
-            ${d.status === "PENDING" ? `
-              <div style="display:flex;gap:8px;margin-top:10px;">
-                <button type="button" class="btn btn-emerald btn-sm" style="flex:1;" onclick="verifyDeposit('${d.id}', true)">Verify &amp; Add</button>
-                <button type="button" class="btn btn-danger btn-sm" onclick="verifyDeposit('${d.id}', false)">Reject</button>
+              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                ${d.status === "PENDING" ? `
+                  <button type="button" class="btn btn-emerald btn-sm" style="flex:1;" onclick="verifyDeposit('${d.id}', true)">Verify &amp; Add</button>
+                  <button type="button" class="btn btn-danger btn-sm" onclick="verifyDeposit('${d.id}', false)">Reject</button>
+                ` : ""}
+                <button type="button" class="btn btn-ghost btn-sm" style="color:#fda4af;border-color:rgba(244,63,94,0.35);" onclick="removeTransactionById('${d.id}')">Remove</button>
               </div>
-            ` : ""}
           </div>
         `).join("");
       }
@@ -715,6 +771,9 @@
       document.getElementById("bkashInput").value = state.settings.paymentNumbers.bkash;
       document.getElementById("nagadInput").value = state.settings.paymentNumbers.nagad;
       document.getElementById("rocketInput").value = state.settings.paymentNumbers.rocket;
+      if (document.getElementById("bkashModeSelect")) document.getElementById("bkashModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.bkash) || "Send Money / Cash Out";
+      if (document.getElementById("nagadModeSelect")) document.getElementById("nagadModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.nagad) || "Send Money / Cash Out";
+      if (document.getElementById("rocketModeSelect")) document.getElementById("rocketModeSelect").value = (state.settings.paymentModes && state.settings.paymentModes.rocket) || "Send Money / Cash Out";
       document.getElementById("supportWaInput").value = state.support?.whatsapp || "";
       document.getElementById("supportTgInput").value = state.support?.telegram || "";
       document.getElementById("supportHoursInput").value = state.support?.hours || "24/7 Live Agent";
@@ -778,6 +837,9 @@
 
     readLocal();
     pullSupabase();
+    setInterval(() => {
+      if (unlocked) pullSupabase();
+    }, 8000);
   </script>
 </body>
 </html>
