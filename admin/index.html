@@ -186,20 +186,36 @@
 
   <div class="shell">
     
-    <div id="pinLockCard" class="card">
-      <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.08em;color:#a5b4fc;margin-bottom:6px;">
-        PRIVATE ROUTE • /admin/
+    <div id="pinLockCard" class="card" style="max-width:420px;margin:36px auto;padding:28px 24px;border:1px solid rgba(99,102,241,0.32);background:linear-gradient(160deg, rgba(17,25,52,0.94), rgba(9,13,28,0.97));">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:0.7rem;font-weight:800;letter-spacing:0.07em;background:rgba(99,102,241,0.16);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);">
+          🔒 SECURE ADMIN PORTAL
+        </span>
+        <span style="font-size:0.72rem;color:#34d399;font-weight:700;">● Encrypted</span>
       </div>
-      <h1 style="font-size:1.3rem;font-weight:800;margin-bottom:6px;">Admin Console Access</h1>
-      <p style="font-size:0.84rem;color:var(--text-secondary);margin-bottom:16px;">
-        এই প্যানেলটি মূল ইউজার অ্যাপ থেকে আলাদা URL-এ রাখা হয়েছে। প্রবেশ করতে Admin PIN দিন (Default: <strong>849201</strong>)।
+
+      <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:1.45rem;margin-bottom:14px;box-shadow:0 10px 25px rgba(99,102,241,0.35);">
+        🛡️
+      </div>
+
+      <h1 style="font-size:1.38rem;font-weight:800;letter-spacing:-0.01em;margin-bottom:6px;">NexaPay Admin Login</h1>
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:20px;">
+        অ্যাডমিন কন্ট্রোল প্যানেলে প্রবেশ করতে আপনার নির্ধারিত সিকিউরিটি PIN প্রদান করুন।
       </p>
+
       <form onsubmit="unlockConsole(event)">
-        <div class="field-group">
-          <label class="field-label">Admin PIN</label>
-          <input type="password" id="pinInput" class="input-control" maxlength="8" placeholder="••••••" required />
+        <div class="field-group" style="margin-bottom:16px;">
+          <label class="field-label" style="color:#cbd5e1;">Security PIN</label>
+          <div style="position:relative;">
+            <input type="password" id="pinInput" class="input-control" maxlength="8" inputmode="numeric" autocomplete="off" placeholder="Enter Admin PIN" style="padding:12px 44px 12px 14px;font-size:0.95rem;letter-spacing:0.14em;" required />
+            <button type="button" onclick="togglePinEye()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1rem;padding:4px;" title="Show/Hide PIN">
+              <span id="pinEyeIcon">👁️</span>
+            </button>
+          </div>
         </div>
-        <button type="submit" class="btn btn-primary" style="width:100%;">Unlock Admin Panel</button>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;font-size:0.92rem;box-shadow:0 10px 24px rgba(99,102,241,0.32);">
+          Sign In to Console →
+        </button>
       </form>
     </div>
 
@@ -425,6 +441,8 @@
       },
       support: { whatsapp: "01712345678", telegram: "https://t.me/nexapaysupport", hours: "24/7 Live Agent" },
       registeredUsers: [],
+      deletedUserEmails: [],
+      kycRequests: [],
       user: null,
       kyc: { status: "NOT_SUBMITTED", fullName: "", nidNumber: "", dob: "", frontPhoto: "", backPhoto: "", selfiePhoto: "" },
       gateways: [],
@@ -511,10 +529,15 @@
           }
           if (cfg.support) state.support = { ...state.support, ...cfg.support };
           if (cfg.kyc && cfg.kyc.status !== "NOT_SUBMITTED") state.kyc = { ...state.kyc, ...cfg.kyc };
+          if (Array.isArray(cfg.kycRequests)) state.kycRequests = cfg.kycRequests;
           if (Array.isArray(cfg.gateways)) state.gateways = cfg.gateways;
           if (Array.isArray(cfg.walletRemovalRequests)) state.walletRemovalRequests = cfg.walletRemovalRequests;
           if (Array.isArray(cfg.deposits)) state.deposits = cfg.deposits;
-          if (Array.isArray(cfg.registeredUsers)) state.registeredUsers = cfg.registeredUsers;
+          if (Array.isArray(cfg.deletedUserEmails)) state.deletedUserEmails = cfg.deletedUserEmails;
+          if (Array.isArray(cfg.registeredUsers)) {
+            const delSet = new Set((state.deletedUserEmails || []).map(e => String(e || "").trim().toLowerCase()));
+            state.registeredUsers = cfg.registeredUsers.filter(u => !delSet.has(String(u.email || "").trim().toLowerCase()));
+          }
           localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
           if (unlocked && !isUserEditingSettings()) renderConsole();
         }
@@ -533,14 +556,25 @@
             partners: state.partners,
             support: state.support,
             kyc: state.kyc,
+            kycRequests: state.kycRequests || [],
             gateways: state.gateways,
             walletRemovalRequests: state.walletRemovalRequests,
             deposits: state.deposits,
-            registeredUsers: state.registeredUsers
+            registeredUsers: state.registeredUsers,
+            deletedUserEmails: state.deletedUserEmails || []
           },
           updated_at: new Date().toISOString()
         });
       } catch (e) {}
+    }
+
+    function togglePinEye() {
+      const inp = document.getElementById("pinInput");
+      const icon = document.getElementById("pinEyeIcon");
+      if (!inp) return;
+      const show = inp.type === "password";
+      inp.type = show ? "text" : "password";
+      if (icon) icon.textContent = show ? "🙈" : "👁️";
     }
 
     function unlockConsole(e) {
@@ -757,11 +791,45 @@
       showToast("ট্রানজেকশন রিমুভ করা হয়েছে");
     }
 
-    function approveKyc(ok) {
-      state.kyc.status = ok ? "VERIFIED" : "REJECTED";
-      pushSupabase();
+    async function approveKycItem(emailKey) {
+      const targetKey = String(emailKey || "").trim().toLowerCase();
+      if (Array.isArray(state.kycRequests) && targetKey) {
+        const item = state.kycRequests.find(k => String(k.userEmail || "").trim().toLowerCase() === targetKey);
+        if (item) item.status = "VERIFIED";
+      }
+      if (Array.isArray(state.registeredUsers) && targetKey) {
+        const uAcc = state.registeredUsers.find(u => String(u.email || "").trim().toLowerCase() === targetKey);
+        if (uAcc) uAcc.kycStatus = "VERIFIED";
+      }
+      if (!targetKey || (state.kyc && String(state.kyc.userEmail || "").trim().toLowerCase() === targetKey)) {
+        state.kyc.status = "VERIFIED";
+      }
+      await pushSupabase();
       renderConsole();
-      showToast(ok ? "KYC Approved" : "KYC Rejected");
+      showToast("KYC ভেরিফাইড করা হয়েছে");
+    }
+
+    async function deleteUserAccount(emailToDelete) {
+      const target = String(emailToDelete || "").trim().toLowerCase();
+      if (!target) return;
+      state.registeredUsers = (state.registeredUsers || []).filter(
+        u => String(u.email || "").trim().toLowerCase() !== target
+      );
+      if (!Array.isArray(state.deletedUserEmails)) state.deletedUserEmails = [];
+      if (!state.deletedUserEmails.includes(target)) {
+        state.deletedUserEmails.push(target);
+      }
+      if (Array.isArray(state.kycRequests)) {
+        state.kycRequests = state.kycRequests.filter(
+          k => String(k.userEmail || "").trim().toLowerCase() !== target
+        );
+      }
+      if (state.kyc && String(state.kyc.userEmail || "").trim().toLowerCase() === target) {
+        state.kyc = { status: "NOT_SUBMITTED", fullName: "", nidNumber: "", dob: "", frontPhoto: "", backPhoto: "", selfiePhoto: "" };
+      }
+      await pushSupabase();
+      renderConsole();
+      showToast("অ্যাকাউন্ট ডিলিট করা হয়েছে");
     }
 
     let settingsDirty = false;
@@ -811,29 +879,88 @@
         `).join("");
       }
 
-      const k = state.kyc;
-      document.getElementById("kycBox").innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <strong style="font-size:0.88rem;">${k.fullName || "No KYC Submitted"}</strong>
-          <span class="badge ${k.status === "VERIFIED" ? "badge-verified" : "badge-pending"}">${k.status}</span>
-        </div>
-        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:10px;">
-          NID: <strong>${k.nidNumber || "—"}</strong> • DOB: <strong>${k.dob || "—"}</strong>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
-          ${["frontPhoto", "backPhoto", "selfiePhoto"].map((key, idx) => {
-            const labels = ["NID Front", "NID Back", "Applicant"];
-            return `<div>
-              <div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:4px;">${labels[idx]}</div>
-              ${k[key] ? `<img src="${k[key]}" style="width:100%;height:70px;object-fit:cover;border-radius:8px;" />` : `<div style="height:70px;background:rgba(30,41,59,0.6);border-radius:8px;"></div>`}
-            </div>`;
-          }).join("")}
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" class="btn btn-emerald btn-sm" style="flex:1;" onclick="approveKyc(true)">Approve KYC</button>
-          <button type="button" class="btn btn-danger btn-sm" onclick="approveKyc(false)">Reject</button>
-        </div>
-      `;
+      const kycEntries = [];
+      const seenEmails = new Set();
+
+      (Array.isArray(state.kycRequests) ? state.kycRequests : []).forEach(r => {
+        if (!r || r.status === "NOT_SUBMITTED") return;
+        const em = String(r.userEmail || "").trim().toLowerCase();
+        const regAcc = (state.registeredUsers || []).find(u => String(u.email || "").trim().toLowerCase() === em) || {};
+        if (em) seenEmails.add(em);
+        kycEntries.push({
+          accountName: r.userName || regAcc.name || r.fullName || "User",
+          email: em || "—",
+          phone: r.userPhone || regAcc.phone || "—",
+          fullName: r.fullName || regAcc.name || "—",
+          nidNumber: r.nidNumber || "—",
+          dob: r.dob || "—",
+          submittedAt: r.submittedAt || "",
+          status: r.status || regAcc.kycStatus || "PENDING_REVIEW"
+        });
+      });
+
+      const k = state.kyc || {};
+      if (k && k.status && k.status !== "NOT_SUBMITTED") {
+        const em = String(k.userEmail || "").trim().toLowerCase();
+        if (!em || !seenEmails.has(em)) {
+          const regAcc = (state.registeredUsers || []).find(u => String(u.email || "").trim().toLowerCase() === em) || {};
+          if (em) seenEmails.add(em);
+          kycEntries.push({
+            accountName: k.userName || regAcc.name || k.fullName || "User",
+            email: em || "—",
+            phone: regAcc.phone || "—",
+            fullName: k.fullName || "—",
+            nidNumber: k.nidNumber || "—",
+            dob: k.dob || "—",
+            submittedAt: "",
+            status: k.status
+          });
+        }
+      }
+
+      (state.registeredUsers || []).forEach(u => {
+        if (u && u.kycStatus && u.kycStatus !== "NOT_SUBMITTED") {
+          const em = String(u.email || "").trim().toLowerCase();
+          if (em && !seenEmails.has(em)) {
+            seenEmails.add(em);
+            kycEntries.push({
+              accountName: u.name || "User",
+              email: em,
+              phone: u.phone || "—",
+              fullName: u.name || "—",
+              nidNumber: "—",
+              dob: "—",
+              submittedAt: "",
+              status: u.kycStatus
+            });
+          }
+        }
+      });
+
+      if (!kycEntries.length) {
+        document.getElementById("kycBox").innerHTML = `<div style="font-size:0.8rem;color:var(--text-secondary);">কোনো KYC রিকোয়েস্ট নেই</div>`;
+      } else {
+        document.getElementById("kycBox").innerHTML = kycEntries.map(item => `
+          <div style="padding:11px;border-radius:11px;background:rgba(30,41,59,0.58);border:1px solid rgba(148,163,184,0.14);margin-bottom:9px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+              <div>
+                <div style="font-weight:800;font-size:0.88rem;color:#f8fafc;">${item.accountName}</div>
+                <div style="font-size:0.73rem;color:#93c5fd;">Email: <strong>${item.email}</strong> • Phone: <strong>${item.phone}</strong></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <span class="badge ${item.status === "VERIFIED" ? "badge-verified" : "badge-pending"}">${item.status === "VERIFIED" ? "VERIFIED" : "PENDING"}</span>
+                ${item.status !== "VERIFIED"
+                  ? `<button type="button" class="btn btn-emerald btn-sm" onclick="approveKycItem('${String(item.email).replace(/'/g, "\'")}')">Approve</button>`
+                  : ""}
+              </div>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-secondary);">
+              NID Name: <strong style="color:#e2e8f0;">${item.fullName}</strong> • NID: <strong style="color:#e2e8f0;">${item.nidNumber}</strong> • DOB: <strong style="color:#e2e8f0;">${item.dob}</strong>
+            </div>
+            ${item.submittedAt ? `<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:3px;">সাবমিটের সময়: ${item.submittedAt}</div>` : ""}
+          </div>
+        `).join("");
+      }
 
       const regBox = document.getElementById("registeredUsersBox");
       if (regBox) {
@@ -847,7 +974,10 @@
               <div style="padding:10px;border-radius:10px;background:rgba(30,41,59,0.55);margin-bottom:8px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
                   <div style="font-weight:800;font-size:0.86rem;">#${users.length - i} • ${u.name || "Unnamed"}</div>
-                  <span class="badge badge-verified">${formatBDT(u.balance || 0)}</span>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="badge badge-verified">${formatBDT(u.balance || 0)}</span>
+                    <button type="button" class="btn btn-danger btn-sm" style="padding:4px 8px;font-size:0.7rem;" onclick="deleteUserAccount('${String(u.email || "").replace(/'/g, "\'")}')">Delete</button>
+                  </div>
                 </div>
                 <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:4px;">
                   Email: <strong style="color:#e2e8f0;">${u.email || "—"}</strong> • Phone: <strong style="color:#e2e8f0;">${u.phone || "—"}</strong>
@@ -950,7 +1080,7 @@
     pullSupabase();
     setInterval(() => {
       if (unlocked && !isUserEditingSettings()) pullSupabase();
-    }, 15000);
+    }, 3000);
   </script>
 </body>
 </html>
