@@ -473,7 +473,12 @@
           .maybeSingle();
         if (!error && data && data.config) {
           const cfg = data.config;
-          if (cfg.brand) state.brand = { ...state.brand, ...cfg.brand };
+          if (cfg.brand) {
+            state.brand = {
+              name: (cfg.brand.name && String(cfg.brand.name).trim()) ? String(cfg.brand.name).trim() : (state.brand.name || "NEXA PAY ULTRA"),
+              logoDataUrl: cfg.brand.logoDataUrl !== undefined ? cfg.brand.logoDataUrl : (state.brand.logoDataUrl || "")
+            };
+          }
           if (cfg.settings) {
             state.settings = {
               ...state.settings,
@@ -555,7 +560,41 @@
     function readFile(file, cb) {
       if (!file) return;
       const r = new FileReader();
-      r.onload = () => cb(r.result);
+      r.onload = () => {
+        const rawUrl = r.result;
+        if (typeof rawUrl !== "string" || !rawUrl.startsWith("data:image/")) {
+          cb(rawUrl);
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 256;
+            let w = img.width || maxDim;
+            let h = img.height || maxDim;
+            if (w > maxDim || h > maxDim) {
+              if (w >= h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL("image/png", 0.85);
+            cb(compressed.length < rawUrl.length ? compressed : rawUrl);
+          } catch (e) {
+            cb(rawUrl);
+          }
+        };
+        img.onerror = () => cb(rawUrl);
+        img.src = rawUrl;
+      };
       r.readAsDataURL(file);
     }
 
@@ -587,10 +626,10 @@
 
     function onBrandLogo(ev) {
       const f = ev.target.files?.[0];
-      readFile(f, url => {
+      readFile(f, async url => {
         state.brand.logoDataUrl = url;
-        pushSupabase();
-        showToast("ব্র্যান্ড লোগো আপডেট হয়েছে");
+        await pushSupabase();
+        showToast("ব্র্যান্ড লোগো আপডেট ও সিঙ্ক হয়েছে");
       });
     }
 
@@ -625,7 +664,7 @@
       showToast("নতুন Admin PIN সেভ হয়েছে");
     }
 
-    function saveSettings() {
+    async function saveSettings() {
       const bn = document.getElementById("brandNameInput").value.trim();
       const bl = document.getElementById("brandLogoUrlInput").value.trim();
       if (bn) state.brand.name = bn;
@@ -646,7 +685,7 @@
       state.support.telegram = document.getElementById("supportTgInput").value.trim();
       state.support.hours = document.getElementById("supportHoursInput").value.trim() || "24/7 Live Agent";
 
-      pushSupabase();
+      await pushSupabase();
       showToast("সব সেটিংস সংরক্ষণ ও সিঙ্ক হয়েছে");
     }
 
