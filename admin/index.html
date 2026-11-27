@@ -247,6 +247,49 @@
 
         <div style="font-weight:800;font-size:0.9rem;margin:16px 0 10px;">KYC Submission Review</div>
         <div id="kycBox" class="subcard"></div>
+        <div style="font-weight:800;font-size:0.9rem;margin:16px 0 10px;">Manual KYC Verification (Admin Entry)</div>
+        <div id="manualKycBox" class="subcard">
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:10px;">
+            কোনো ইউজার নিজে KYC সাবমিট করতে না পারলে তার NID তথ্য ও ছবি দিয়ে সরাসরি আইডি ভেরিফাইড করুন।
+          </div>
+          <form onsubmit="submitManualKycForUser(event)">
+            <div class="field-group">
+              <label class="field-label">রেজিস্টার্ড ইউজার সিলেক্ট করুন *</label>
+              <select id="manualKycUserSelect" class="input-control" onchange="onManualKycUserChange()">
+                <option value="">— ইউজার নির্বাচন করুন —</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">NID অনুযায়ী পূর্ণ নাম *</label>
+              <input type="text" id="manualKycFullName" class="input-control" placeholder="আবেদনকারীর পূর্ণ নাম" required />
+            </div>
+            <div class="field-group">
+              <label class="field-label">NID Number *</label>
+              <input type="text" id="manualKycNidNumber" class="input-control" placeholder="10, 13 বা 17 ডিজিটের NID নম্বর" required />
+            </div>
+            <div class="field-group">
+              <label class="field-label">Date of Birth *</label>
+              <input type="date" id="manualKycDob" class="input-control" required />
+            </div>
+            <div class="field-group">
+              <label class="field-label">১. NID সামনের ছবি (Front Photo) *</label>
+              <input type="file" accept="image/*" class="input-control" style="margin-bottom:6px;" onchange="onManualKycPhoto(event, 'frontPhoto', 'manualKycFrontPreview')" />
+              <img id="manualKycFrontPreview" class="preview-img" style="display:none;" alt="NID Front" />
+            </div>
+            <div class="field-group">
+              <label class="field-label">২. NID পিছনের ছবি (Back Photo) *</label>
+              <input type="file" accept="image/*" class="input-control" style="margin-bottom:6px;" onchange="onManualKycPhoto(event, 'backPhoto', 'manualKycBackPreview')" />
+              <img id="manualKycBackPreview" class="preview-img" style="display:none;" alt="NID Back" />
+            </div>
+            <div class="field-group">
+              <label class="field-label">৩. আবেদনকারীর ছবি (Applicant Photo) *</label>
+              <input type="file" accept="image/*" class="input-control" style="margin-bottom:6px;" onchange="onManualKycPhoto(event, 'selfiePhoto', 'manualKycSelfiePreview')" />
+              <img id="manualKycSelfiePreview" class="preview-img" style="display:none;" alt="Applicant Photo" />
+            </div>
+            <button type="submit" class="btn btn-emerald" style="width:100%;">Verify User KYC Now</button>
+          </form>
+        </div>
+
 
         <div style="font-weight:800;font-size:0.9rem;margin:16px 0 10px;">Registered Users History</div>
         <div id="registeredUsersBox" class="subcard"></div>
@@ -861,6 +904,145 @@
       if (panel && e.target && panel.contains(e.target)) settingsDirty = true;
     });
 
+    const manualKycDraft = { frontPhoto: "", backPhoto: "", selfiePhoto: "" };
+
+    function populateManualKycUserSelect() {
+      const sel = document.getElementById("manualKycUserSelect");
+      if (!sel) return;
+      const prevVal = sel.value;
+      const users = Array.isArray(state.registeredUsers) ? state.registeredUsers : [];
+      sel.innerHTML = `<option value="">— ইউজার নির্বাচন করুন —</option>` + users.map(u => {
+        const em = String(u.email || "").trim().toLowerCase();
+        const badgeTxt = u.kycStatus === "VERIFIED" ? " [VERIFIED]" : "";
+        return `<option value="${em}">${u.name || "User"} (${em} • ${u.phone || "—"})${badgeTxt}</option>`;
+      }).join("");
+      if (prevVal && users.some(u => String(u.email || "").trim().toLowerCase() === prevVal)) {
+        sel.value = prevVal;
+      }
+    }
+
+    function onManualKycUserChange() {
+      const sel = document.getElementById("manualKycUserSelect");
+      const em = sel ? String(sel.value || "").trim().toLowerCase() : "";
+      const u = (state.registeredUsers || []).find(acc => String(acc.email || "").trim().toLowerCase() === em);
+      const nameInp = document.getElementById("manualKycFullName");
+      const nidInp = document.getElementById("manualKycNidNumber");
+      const dobInp = document.getElementById("manualKycDob");
+      const req = (state.kycRequests || []).find(r => String(r.userEmail || "").trim().toLowerCase() === em);
+
+      if (u && nameInp && !nameInp.value.trim()) nameInp.value = u.name || "";
+      if (nidInp) nidInp.value = (req && req.nidNumber) || "";
+      if (dobInp) dobInp.value = (req && req.dob) || "";
+    }
+
+    function onManualKycPhoto(event, key, imgId) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      readFile(file, dataUrl => {
+        manualKycDraft[key] = dataUrl;
+        const img = document.getElementById(imgId);
+        if (img) {
+          img.src = dataUrl;
+          img.style.display = "block";
+        }
+      });
+    }
+
+    async function submitManualKycForUser(e) {
+      e.preventDefault();
+      const sel = document.getElementById("manualKycUserSelect");
+      const targetEmail = sel ? String(sel.value || "").trim().toLowerCase() : "";
+      if (!targetEmail) {
+        showToast("আগে রেজিস্টার্ড ইউজার সিলেক্ট করুন!");
+        return;
+      }
+      const fullName = document.getElementById("manualKycFullName").value.trim();
+      const nidNumber = document.getElementById("manualKycNidNumber").value.trim();
+      const dob = document.getElementById("manualKycDob").value;
+
+      if (!fullName || !nidNumber || !dob) {
+        showToast("পূর্ণ নাম, NID নম্বর এবং জন্মতারিখ দিন");
+        return;
+      }
+      if (!manualKycDraft.frontPhoto || !manualKycDraft.backPhoto || !manualKycDraft.selfiePhoto) {
+        showToast("NID-এর সামনের ছবি, পিছনের ছবি এবং আবেদনকারীর ছবি দিন");
+        return;
+      }
+
+      const targetUser = (state.registeredUsers || []).find(u => String(u.email || "").trim().toLowerCase() === targetEmail) || {};
+      const userName = targetUser.name || fullName;
+      const userPhone = targetUser.phone || "";
+
+      if (!Array.isArray(state.kycRequests)) state.kycRequests = [];
+      const entry = {
+        id: "KYC-" + Date.now().toString().slice(-6),
+        userEmail: targetEmail,
+        userName,
+        userPhone,
+        fullName,
+        nidNumber,
+        dob,
+        frontPhoto: manualKycDraft.frontPhoto,
+        backPhoto: manualKycDraft.backPhoto,
+        selfiePhoto: manualKycDraft.selfiePhoto,
+        status: "VERIFIED",
+        submittedAt: new Date().toLocaleString("bn-BD") + " (Admin Verified)"
+      };
+
+      const existingIdx = state.kycRequests.findIndex(r => String(r.userEmail || "").trim().toLowerCase() === targetEmail);
+      if (existingIdx >= 0) {
+        state.kycRequests[existingIdx] = { ...state.kycRequests[existingIdx], ...entry };
+      } else {
+        state.kycRequests.unshift(entry);
+      }
+
+      if (Array.isArray(state.registeredUsers)) {
+        const uAcc = state.registeredUsers.find(u => String(u.email || "").trim().toLowerCase() === targetEmail);
+        if (uAcc) uAcc.kycStatus = "VERIFIED";
+      }
+
+      state.kyc = {
+        status: "VERIFIED",
+        fullName,
+        nidNumber,
+        dob,
+        frontPhoto: manualKycDraft.frontPhoto,
+        backPhoto: manualKycDraft.backPhoto,
+        selfiePhoto: manualKycDraft.selfiePhoto,
+        userEmail: targetEmail,
+        userName
+      };
+
+      await pushSupabase();
+
+      if (sbClient) {
+        try {
+          await sbClient.from("kyc_submissions").upsert({
+            id: "kyc_" + targetEmail.replace(/[^a-z0-9]/g, "_"),
+            full_name: fullName,
+            nid_number: nidNumber,
+            dob,
+            front_photo_url: manualKycDraft.frontPhoto,
+            back_photo_url: manualKycDraft.backPhoto,
+            selfie_photo_url: manualKycDraft.selfiePhoto,
+            status: "VERIFIED",
+            updated_at: new Date().toISOString()
+          });
+        } catch (err) {}
+      }
+
+      manualKycDraft.frontPhoto = "";
+      manualKycDraft.backPhoto = "";
+      manualKycDraft.selfiePhoto = "";
+      ["manualKycFrontPreview", "manualKycBackPreview", "manualKycSelfiePreview"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.src = ""; el.style.display = "none"; }
+      });
+
+      renderConsole();
+      showToast(userName + " (" + targetEmail + ") এর KYC ভেরিফাইড করা হয়েছে!");
+    }
+
     function renderConsole() {
       const depEl = document.getElementById("depositList");
       if (!state.deposits.length) {
@@ -970,6 +1152,7 @@
         `).join("");
       }
 
+      populateManualKycUserSelect();
       const regBox = document.getElementById("registeredUsersBox");
       if (regBox) {
         const users = Array.isArray(state.registeredUsers) ? [...state.registeredUsers].reverse() : [];
