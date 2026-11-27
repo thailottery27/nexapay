@@ -1236,7 +1236,10 @@
           ...structuredClone(defaultState),
           ...parsed,
           registeredUsers: Array.isArray(parsed.registeredUsers) ? parsed.registeredUsers : [],
-          brand: { ...structuredClone(defaultState.brand), ...(parsed.brand || {}) },
+          brand: {
+            name: (parsed.brand && parsed.brand.name && String(parsed.brand.name).trim()) ? String(parsed.brand.name).trim() : defaultState.brand.name,
+            logoDataUrl: (parsed.brand && typeof parsed.brand.logoDataUrl === "string") ? parsed.brand.logoDataUrl : ""
+          },
           settings: {
             ...structuredClone(defaultState.settings),
             ...(parsed.settings || {}),
@@ -1450,7 +1453,12 @@
 
         if (!error && data && data.config) {
           const cfg = data.config;
-          if (cfg.brand) state.brand = { ...state.brand, ...cfg.brand };
+          if (cfg.brand) {
+            state.brand = {
+              name: (cfg.brand.name && String(cfg.brand.name).trim()) ? String(cfg.brand.name).trim() : (state.brand.name || "NEXA PAY ULTRA"),
+              logoDataUrl: cfg.brand.logoDataUrl !== undefined ? cfg.brand.logoDataUrl : (state.brand.logoDataUrl || "")
+            };
+          }
           if (cfg.settings) {
             state.settings = {
               ...state.settings,
@@ -2270,8 +2278,10 @@
       document.getElementById("brandNameDisplay").textContent = bName;
 
       const logoBox = document.getElementById("headerLogoBox");
-      if (state.brand.logoDataUrl) {
-        logoBox.innerHTML = `<img src="${state.brand.logoDataUrl}" alt="Brand Logo" />`;
+      const logoSrc = (state.brand && state.brand.logoDataUrl) ? String(state.brand.logoDataUrl).trim() : "";
+      if (logoSrc) {
+        const initial = bName.trim().charAt(0).toUpperCase() || "N";
+        logoBox.innerHTML = `<img src="${logoSrc}" alt="Brand Logo" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\'font-weight:800;font-size:0.95rem;color:#fff;\'>${initial}</span>';" />`;
       } else {
         const initial = bName.trim().charAt(0).toUpperCase() || "N";
         logoBox.innerHTML = `<span style="font-weight:800;font-size:0.95rem;color:#fff;">${initial}</span>`;
