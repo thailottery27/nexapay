@@ -1490,6 +1490,7 @@
       k.userName = uName;
 
       if (!Array.isArray(state.kycRequests)) state.kycRequests = [];
+      const finalStatus = k.status || "VERIFIED";
       const reqEntry = {
         id: "KYC-" + Date.now().toString().slice(-6),
         userEmail: uEmail,
@@ -1498,7 +1499,7 @@
         fullName: k.fullName || uName,
         nidNumber: k.nidNumber || "",
         dob: k.dob || "",
-        status: "PENDING_REVIEW",
+        status: finalStatus,
         submittedAt: new Date().toLocaleString("bn-BD")
       };
 
@@ -1513,7 +1514,7 @@
 
       if (Array.isArray(state.registeredUsers) && uEmail) {
         const uAcc = state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === uEmail);
-        if (uAcc) uAcc.kycStatus = "PENDING_REVIEW";
+        if (uAcc) uAcc.kycStatus = finalStatus;
       }
 
       saveState(true);
@@ -1528,7 +1529,7 @@
           front_photo_url: k.frontPhoto,
           back_photo_url: k.backPhoto,
           selfie_photo_url: k.selfiePhoto,
-          status: "PENDING_REVIEW",
+          status: finalStatus,
           updated_at: new Date().toISOString()
         });
       } catch (e) {
@@ -2378,11 +2379,15 @@
         return;
       }
 
-      state.kyc.status = "PENDING_REVIEW";
+      state.kyc.status = "VERIFIED";
+      if (Array.isArray(state.registeredUsers) && state.kyc.userEmail) {
+        const uAcc = state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === state.kyc.userEmail);
+        if (uAcc) uAcc.kycStatus = "VERIFIED";
+      }
       saveState();
       await pushKycToSupabase(state.kyc);
       closeModal();
-      showToast("KYC ডকুমেন্ট ও ছবি সাবমিট হয়েছে!");
+      showToast("KYC সফলভাবে ভেরিফাইড (VERIFIED) হয়েছে!");
       renderDashboard();
     }
 
