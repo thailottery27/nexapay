@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="bn" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control Console — NEXA PAY ULTRA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-base: #060913;
+      --bg-card: rgba(16, 24, 45, 0.85);
+      --border-subtle: rgba(148, 163, 184, 0.16);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-indigo: #6366f1;
+      --accent-violet: #8b5cf6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', 'Hind Siliguri', sans-serif;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(99, 102, 241, 0.22), transparent 42%),
+        radial-gradient(circle at 85% 20%, rgba(6, 182, 212, 0.14), transparent 40%),
+        var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 20px 14px 48px;
+      line-height: 1.55;
+    }
+
+    .shell {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .subcard {
+      background: rgba(15, 23, 42, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .field-group { margin-bottom: 12px; }
+    .field-label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+    }
+
+    .input-control {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .input-control:focus { border-color: var(--accent-indigo); }
+
+    .btn {
+      border: none;
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 700;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font-size: 0.88rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-sm { padding: 8px 12px; font-size: 0.78rem; border-radius: 10px; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet)); color: #fff; }
+    .btn-emerald { background: linear-gradient(135deg, #059669, var(--accent-emerald)); color: #fff; }
+    .btn-ghost { background: rgba(30, 41, 59, 0.8); color: var(--text-primary); border: 1px solid var(--border-subtle); }
+    .btn-danger { background: rgba(244, 63, 94, 0.16); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.35); }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tab-btn {
+      padding: 9px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(15, 23, 42, 0.75);
+      color: var(--text-secondary);
+      font-weight: 700;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-violet));
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .badge-pending { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+    .badge-verified { background: rgba(16, 185, 129, 0.16); color: #34d399; }
+    .badge-rejected { background: rgba(244, 63, 94, 0.16); color: #fb7185; }
+
+    .preview-img {
+      width: 100%;
+      max-height: 150px;
+      object-fit: cover;
+      border-radius: 10px;
+      margin-top: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .toast {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-14px);
+      background: rgba(15, 23, 42, 0.96);
+      color: #fff;
+      border: 1px solid rgba(99, 102, 241, 0.5);
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      z-index: 99;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.22s ease;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <div class="shell">
+    
+    <div id="pinLockCard" class="card">
+      <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.08em;color:#a5b4fc;margin-bottom:6px;">
+        PRIVATE ROUTE • /admin/
+      </div>
+      <h1 style="font-size:1.3rem;font-weight:800;margin-bottom:6px;">Admin Console Access</h1>
+      <p style="font-size:0.84rem;color:var(--text-secondary);margin-bottom:16px;">
+        এই প্যানেলটি মূল ইউজার অ্যাপ থেকে আলাদা URL-এ রাখা হয়েছে। প্রবেশ করতে Admin PIN দিন (Default: <strong>849201</strong>)।
+      </p>
+      <form onsubmit="unlockConsole(event)">
+        <div class="field-group">
+          <label class="field-label">Admin PIN</label>
+          <input type="password" id="pinInput" class="input-control" maxlength="8" placeholder="••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Unlock Admin Panel</button>
+      </form>
+    </div>
+
+    
+    <div id="consoleCard" class="card" style="display:none;">
+      <div class="top-bar">
+        <div>
+          <div style="font-weight:800;font-size:1.05rem;">🛡️ Admin Control Panel</div>
+          <div style="font-size:0.74rem;color:var(--text-secondary);">Supabase Synced • Deposits, KYC, Partners &amp; Settings</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="../index.html" class="btn btn-ghost btn-sm" style="text-decoration:none;">Main App</a>
+          <button type="button" class="btn btn-danger btn-sm" onclick="lockConsole()">Lock</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button id="tabDeposits" type="button" class="tab-btn active" onclick="switchTab('deposits')">Deposits &amp; KYC</button>
+        <button id="tabPartners" type="button" class="tab-btn" onclick="switchTab('partners')">1X &amp; CK444</button>
+        <button id="tabSettings" type="button" class="tab-btn" onclick="switchTab('settings')">Limits &amp; Brand</button>
+      </div>
+
+      <div id="panelDeposits">
+        <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Deposit Requests</div>
+        <div id="depositList"></div>
+
+        <div style="font-weight:800;font-size:0.9rem;margin:16px 0 10px;">Wallet Removal Requests &amp; Connected Wallets</div>
+        <div id="walletRemovalBox" class="subcard"></div>
+
+        <div style="font-weight:800;font-size:0.9rem;margin:16px 0 10px;">KYC Submission Review</div>
+        <div id="kycBox" class="subcard"></div>
+      </div>
+
+      <div id="panelPartners" style="display:none;">
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;color:#67e8f9;">Partner Slot 1 (1X)</div>
+          <div class="field-group">
+            <label class="field-label">Name</label>
+            <input type="text" id="slot1Name" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Promotion Link (URL)</label>
+            <input type="url" id="slot1Url" class="input-control" placeholder="https://..." />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Logo Upload or URL</label>
+            <input type="file" accept="image/*" class="input-control" style="margin-bottom:8px;" onchange="onPartnerLogo('slot1', event)" />
+            <input type="text" id="slot1LogoUrl" class="input-control" placeholder="https://.../logo1.png" />
+          </div>
+        </div>
+
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;color:#a5b4fc;">Partner Slot 2 (CK444)</div>
+          <div class="field-group">
+            <label class="field-label">Name</label>
+            <input type="text" id="slot2Name" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Promotion Link (URL)</label>
+            <input type="url" id="slot2Url" class="input-control" placeholder="https://..." />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Logo Upload or URL</label>
+            <input type="file" accept="image/*" class="input-control" style="margin-bottom:8px;" onchange="onPartnerLogo('slot2', event)" />
+            <input type="text" id="slot2LogoUrl" class="input-control" placeholder="https://.../logo2.png" />
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" style="width:100%;" onclick="savePartners()">Save Partner Links &amp; Logos</button>
+      </div>
+
+      <div id="panelSettings" style="display:none;">
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Brand Name &amp; Logo</div>
+          <div class="field-group">
+            <label class="field-label">Brand Name</label>
+            <input type="text" id="brandNameInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Brand Logo Upload or URL</label>
+            <input type="file" accept="image/*" class="input-control" style="margin-bottom:8px;" onchange="onBrandLogo(event)" />
+            <input type="text" id="brandLogoUrlInput" class="input-control" placeholder="https://.../brand-logo.png" />
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearBrandLogo()">Remove Custom Logo</button>
+        </div>
+
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Commission &amp; Limits</div>
+          <div class="field-group">
+            <label class="field-label">Personal Number Commission Rate (%)</label>
+            <input type="number" step="0.1" id="personalCommInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Agent Number Commission Rate (%)</label>
+            <input type="number" step="0.1" id="agentCommInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">General Commission Rate (%)</label>
+            <input type="number" step="0.1" id="commInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Min Deposit (৳)</label>
+            <input type="number" id="minDepInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Min Withdraw (৳)</label>
+            <input type="number" id="minWdInput" class="input-control" />
+          </div>
+        </div>
+
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;">Payment Numbers</div>
+          <div class="field-group">
+            <label class="field-label">bKash Number</label>
+            <input type="text" id="bkashInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Nagad Number</label>
+            <input type="text" id="nagadInput" class="input-control" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Rocket Number</label>
+            <input type="text" id="rocketInput" class="input-control" />
+          </div>
+        </div>
+
+        <div class="subcard" style="border-color:rgba(129,140,248,0.35);">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:8px;color:#c7d2fe;">🔐 Change Admin PIN</div>
+          <div class="field-group">
+            <label class="field-label">Current PIN</label>
+            <input type="password" id="curPinInput" class="input-control" maxlength="8" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">New PIN (4–8 digits)</label>
+            <input type="password" id="newPinInput" class="input-control" maxlength="8" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Confirm New PIN</label>
+            <input type="password" id="confPinInput" class="input-control" maxlength="8" />
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="updatePin()">Update PIN</button>
+        </div>
+
+        <div class="subcard">
+          <div style="font-weight:800;font-size:0.9rem;margin-bottom:10px;color:#67e8f9;">🎧 Live Customer Support Settings</div>
+          <div class="field-group">
+            <label class="field-label">WhatsApp Number</label>
+            <input type="text" id="supportWaInput" class="input-control" placeholder="017XXXXXXXX" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Telegram Support Link</label>
+            <input type="text" id="supportTgInput" class="input-control" placeholder="https://t.me/..." />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Support Hours</label>
+            <input type="text" id="supportHoursInput" class="input-control" placeholder="24/7 Live Agent" />
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-emerald" style="width:100%;" onclick="saveSettings()">Save All Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "nexa_pay_ultra_state_v1";
+    const SUPABASE_URL = "https://jivqxgexpxmrnnbtdipt.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_94EQN22tie9DHz46u9Djhg_bn_wypDD";
+    const DEFAULT_PIN = "849201";
+
+    let sbClient = null;
+    try {
+      if (window.supabase && typeof window.supabase.createClient === "function") {
+        sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch (e) {}
+
+    let unlocked = false;
+    let state = {
+      brand: { name: "NEXA PAY ULTRA", logoDataUrl: "" },
+      settings: {
+        adminPin: "849201",
+        commissionRate: 2.5,
+        personalCommissionRate: 2.0,
+        agentCommissionRate: 3.5,
+        minDeposit: 200,
+        minWithdraw: 500,
+        paymentNumbers: { bkash: "01712345678", nagad: "01812345678", rocket: "01912345678" }
+      },
+      partners: {
+        slot1: { name: "1X", url: "https://1xbet.com", logoDataUrl: "" },
+        slot2: { name: "CK444", url: "https://ck444.com", logoDataUrl: "" }
+      },
+      support: { whatsapp: "01712345678", telegram: "https://t.me/nexapaysupport", hours: "24/7 Live Agent" },
+      user: null,
+      kyc: { status: "NOT_SUBMITTED", fullName: "", nidNumber: "", dob: "", frontPhoto: "", backPhoto: "", selfiePhoto: "" },
+      gateways: [],
+      walletRemovalRequests: [],
+      deposits: [],
+      transactions: []
+    };
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(window.__t);
+      window.__t = setTimeout(() => el.classList.remove("show"), 2600);
+    }
+
+    function formatBDT(n) {
+      return "৳" + (Number(n) || 0).toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function getPin() {
+      const p = state?.settings?.adminPin ? String(state.settings.adminPin).trim() : "";
+      return /^\d{4,8}$/.test(p) ? p : DEFAULT_PIN;
+    }
+
+    function readLocal() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state = {
+            ...state,
+            ...parsed,
+            brand: { ...state.brand, ...(parsed.brand || {}) },
+            settings: {
+              ...state.settings,
+              ...(parsed.settings || {}),
+              paymentNumbers: { ...state.settings.paymentNumbers, ...((parsed.settings && parsed.settings.paymentNumbers) || {}) }
+            },
+            partners: {
+              slot1: { ...state.partners.slot1, ...((parsed.partners && parsed.partners.slot1) || {}) },
+              slot2: { ...state.partners.slot2, ...((parsed.partners && parsed.partners.slot2) || {}) }
+            },
+            kyc: { ...state.kyc, ...(parsed.kyc || {}) },
+            deposits: Array.isArray(parsed.deposits) ? parsed.deposits : [],
+            transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
+          };
+        }
+      } catch (e) {}
+    }
+
+    async function pullSupabase() {
+      if (!sbClient) return;
+      try {
+        const { data, error } = await sbClient
+          .from("platform_config")
+          .select("config")
+          .eq("id", "global_settings")
+          .maybeSingle();
+        if (!error && data && data.config) {
+          const cfg = data.config;
+          if (cfg.brand) state.brand = { ...state.brand, ...cfg.brand };
+          if (cfg.settings) {
+            state.settings = {
+              ...state.settings,
+              ...cfg.settings,
+              paymentNumbers: { ...state.settings.paymentNumbers, ...(cfg.settings.paymentNumbers || {}) }
+            };
+          }
+          if (cfg.partners) {
+            state.partners = {
+              slot1: { ...state.partners.slot1, ...(cfg.partners.slot1 || {}) },
+              slot2: { ...state.partners.slot2, ...(cfg.partners.slot2 || {}) }
+            };
+          }
+          if (cfg.support) state.support = { ...state.support, ...cfg.support };
+          if (cfg.kyc && cfg.kyc.status !== "NOT_SUBMITTED") state.kyc = { ...state.kyc, ...cfg.kyc };
+          if (Array.isArray(cfg.gateways)) state.gateways = cfg.gateways;
+          if (Array.isArray(cfg.walletRemovalRequests)) state.walletRemovalRequests = cfg.walletRemovalRequests;
+          if (Array.isArray(cfg.deposits) && cfg.deposits.length) state.deposits = cfg.deposits;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          if (unlocked) renderConsole();
+        }
+      } catch (e) {}
+    }
+
+    async function pushSupabase() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (!sbClient) return;
+      try {
+        await sbClient.from("platform_config").upsert({
+          id: "global_settings",
+          config: {
+            brand: state.brand,
+            settings: state.settings,
+            partners: state.partners,
+            support: state.support,
+            kyc: state.kyc,
+            gateways: state.gateways,
+            walletRemovalRequests: state.walletRemovalRequests,
+            deposits: state.deposits
+          },
+          updated_at: new Date().toISOString()
+        });
+      } catch (e) {}
+    }
+
+    function unlockConsole(e) {
+      e.preventDefault();
+      const entered = document.getElementById("pinInput").value.trim();
+      if (entered !== getPin()) {
+        showToast("ভুল PIN! সঠিক PIN দিন");
+        return;
+      }
+      unlocked = true;
+      document.getElementById("pinLockCard").style.display = "none";
+      document.getElementById("consoleCard").style.display = "block";
+      renderConsole();
+      pullSupabase();
+    }
+
+    function lockConsole() {
+      unlocked = false;
+      document.getElementById("pinInput").value = "";
+      document.getElementById("consoleCard").style.display = "none";
+      document.getElementById("pinLockCard").style.display = "block";
+    }
+
+    function switchTab(tab) {
+      ["deposits", "partners", "settings"].forEach(t => {
+        const cap = t.charAt(0).toUpperCase() + t.slice(1);
+        document.getElementById("tab" + cap).classList.toggle("active", t === tab);
+        document.getElementById("panel" + cap).style.display = t === tab ? "block" : "none";
+      });
+      renderConsole();
+    }
+
+    function readFile(file, cb) {
+      if (!file) return;
+      const r = new FileReader();
+      r.onload = () => cb(r.result);
+      r.readAsDataURL(file);
+    }
+
+    function onPartnerLogo(slot, ev) {
+      const f = ev.target.files?.[0];
+      readFile(f, url => {
+        state.partners[slot].logoDataUrl = url;
+        pushSupabase();
+        showToast("পার্টনার লোগো আপডেট হয়েছে");
+      });
+    }
+
+    function savePartners() {
+      state.partners.slot1.name = document.getElementById("slot1Name").value.trim() || "1X";
+      const u1 = document.getElementById("slot1Url").value.trim();
+      const l1 = document.getElementById("slot1LogoUrl").value.trim();
+      if (u1) state.partners.slot1.url = u1;
+      if (l1) state.partners.slot1.logoDataUrl = l1;
+
+      state.partners.slot2.name = document.getElementById("slot2Name").value.trim() || "CK444";
+      const u2 = document.getElementById("slot2Url").value.trim();
+      const l2 = document.getElementById("slot2LogoUrl").value.trim();
+      if (u2) state.partners.slot2.url = u2;
+      if (l2) state.partners.slot2.logoDataUrl = l2;
+
+      pushSupabase();
+      showToast("1X ও CK444 সেটিংস সেভ হয়েছে");
+    }
+
+    function onBrandLogo(ev) {
+      const f = ev.target.files?.[0];
+      readFile(f, url => {
+        state.brand.logoDataUrl = url;
+        pushSupabase();
+        showToast("ব্র্যান্ড লোগো আপডেট হয়েছে");
+      });
+    }
+
+    function clearBrandLogo() {
+      state.brand.logoDataUrl = "";
+      document.getElementById("brandLogoUrlInput").value = "";
+      pushSupabase();
+      showToast("কাস্টম লোগো সরানো হয়েছে");
+    }
+
+    function updatePin() {
+      const cur = document.getElementById("curPinInput").value.trim();
+      const nw = document.getElementById("newPinInput").value.trim();
+      const cf = document.getElementById("confPinInput").value.trim();
+      if (cur !== getPin()) {
+        showToast("বর্তমান PIN সঠিক নয়");
+        return;
+      }
+      if (!/^\d{4,8}$/.test(nw)) {
+        showToast("নতুন PIN ৪–৮ ডিজিটের সংখ্যা হতে হবে");
+        return;
+      }
+      if (nw !== cf) {
+        showToast("New PIN ও Confirm PIN মিলেনি");
+        return;
+      }
+      state.settings.adminPin = nw;
+      pushSupabase();
+      document.getElementById("curPinInput").value = "";
+      document.getElementById("newPinInput").value = "";
+      document.getElementById("confPinInput").value = "";
+      showToast("নতুন Admin PIN সেভ হয়েছে");
+    }
+
+    function saveSettings() {
+      const bn = document.getElementById("brandNameInput").value.trim();
+      const bl = document.getElementById("brandLogoUrlInput").value.trim();
+      if (bn) state.brand.name = bn;
+      if (bl) state.brand.logoDataUrl = bl;
+
+      state.settings.personalCommissionRate = Number(document.getElementById("personalCommInput").value) ?? 2.0;
+      state.settings.agentCommissionRate = Number(document.getElementById("agentCommInput").value) ?? 3.5;
+      state.settings.commissionRate = Number(document.getElementById("commInput").value) || 0;
+      state.settings.minDeposit = Number(document.getElementById("minDepInput").value) || 200;
+      state.settings.minWithdraw = Number(document.getElementById("minWdInput").value) || 500;
+      state.settings.paymentNumbers.bkash = document.getElementById("bkashInput").value.trim();
+      state.settings.paymentNumbers.nagad = document.getElementById("nagadInput").value.trim();
+      state.settings.paymentNumbers.rocket = document.getElementById("rocketInput").value.trim();
+      state.support.whatsapp = document.getElementById("supportWaInput").value.trim();
+      state.support.telegram = document.getElementById("supportTgInput").value.trim();
+      state.support.hours = document.getElementById("supportHoursInput").value.trim() || "24/7 Live Agent";
+
+      pushSupabase();
+      showToast("সব সেটিংস সংরক্ষণ ও সিঙ্ক হয়েছে");
+    }
+
+    function verifyDeposit(id, approve) {
+      const d = state.deposits.find(item => item.id === id);
+      if (!d || d.status !== "PENDING") return;
+      d.status = approve ? "VERIFIED" : "REJECTED";
+      if (approve && state.user) {
+        state.user.balance = (Number(state.user.balance) || 0) + Number(d.amount);
+        state.user.totalDeposit = (Number(state.user.totalDeposit) || 0) + Number(d.amount);
+      }
+      const tx = state.transactions.find(t => t.id === id);
+      if (tx) tx.status = d.status;
+      pushSupabase();
+      renderConsole();
+      showToast(approve ? "ডিপোজিট ভেরিফাই ও ব্যালেন্স অ্যাড হয়েছে" : "ডিপোজিট বাতিল করা হয়েছে");
+    }
+
+    function approveKyc(ok) {
+      state.kyc.status = ok ? "VERIFIED" : "REJECTED";
+      pushSupabase();
+      renderConsole();
+      showToast(ok ? "KYC Approved" : "KYC Rejected");
+    }
+
+    function renderConsole() {
+      const depEl = document.getElementById("depositList");
+      if (!state.deposits.length) {
+        depEl.innerHTML = `<div class="subcard" style="font-size:0.82rem;color:var(--text-secondary);">কোনো ডিপোজিট রিকোয়েস্ট নেই</div>`;
+      } else {
+        depEl.innerHTML = state.deposits.map(d => `
+          <div class="subcard">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div>
+                <div style="font-weight:800;font-size:0.9rem;">${d.method} • ${formatBDT(d.amount)}</div>
+                <div style="font-size:0.72rem;color:var(--text-secondary);">Ref: ${d.ref} • ${d.createdAt || ""}</div>
+              </div>
+              <span class="badge ${d.status === "VERIFIED" ? "badge-verified" : d.status === "REJECTED" ? "badge-rejected" : "badge-pending"}">${d.status}</span>
+            </div>
+            ${d.screenshot ? `<img src="${d.screenshot}" class="preview-img" alt="Screenshot" />` : ""}
+            ${d.status === "PENDING" ? `
+              <div style="display:flex;gap:8px;margin-top:10px;">
+                <button type="button" class="btn btn-emerald btn-sm" style="flex:1;" onclick="verifyDeposit('${d.id}', true)">Verify &amp; Add</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="verifyDeposit('${d.id}', false)">Reject</button>
+              </div>
+            ` : ""}
+          </div>
+        `).join("");
+      }
+
+      const k = state.kyc;
+      document.getElementById("kycBox").innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="font-size:0.88rem;">${k.fullName || "No KYC Submitted"}</strong>
+          <span class="badge ${k.status === "VERIFIED" ? "badge-verified" : "badge-pending"}">${k.status}</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:10px;">
+          NID: <strong>${k.nidNumber || "—"}</strong> • DOB: <strong>${k.dob || "—"}</strong>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+          ${["frontPhoto", "backPhoto", "selfiePhoto"].map((key, idx) => {
+            const labels = ["NID Front", "NID Back", "Applicant"];
+            return `<div>
+              <div style="font-size:0.68rem;color:var(--text-secondary);margin-bottom:4px;">${labels[idx]}</div>
+              ${k[key] ? `<img src="${k[key]}" style="width:100%;height:70px;object-fit:cover;border-radius:8px;" />` : `<div style="height:70px;background:rgba(30,41,59,0.6);border-radius:8px;"></div>`}
+            </div>`;
+          }).join("")}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-emerald btn-sm" style="flex:1;" onclick="approveKyc(true)">Approve KYC</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="approveKyc(false)">Reject</button>
+        </div>
+      `;
+
+      document.getElementById("slot1Name").value = state.partners.slot1.name || "";
+      document.getElementById("slot1Url").value = state.partners.slot1.url || "";
+      document.getElementById("slot1LogoUrl").value = state.partners.slot1.logoDataUrl.startsWith("data:") ? "" : state.partners.slot1.logoDataUrl;
+
+      document.getElementById("slot2Name").value = state.partners.slot2.name || "";
+      document.getElementById("slot2Url").value = state.partners.slot2.url || "";
+      document.getElementById("slot2LogoUrl").value = state.partners.slot2.logoDataUrl.startsWith("data:") ? "" : state.partners.slot2.logoDataUrl;
+
+      document.getElementById("brandNameInput").value = state.brand.name || "";
+      document.getElementById("brandLogoUrlInput").value = state.brand.logoDataUrl.startsWith("data:") ? "" : state.brand.logoDataUrl;
+      document.getElementById("personalCommInput").value = state.settings.personalCommissionRate ?? 2.0;
+      document.getElementById("agentCommInput").value = state.settings.agentCommissionRate ?? 3.5;
+      document.getElementById("commInput").value = state.settings.commissionRate;
+      document.getElementById("minDepInput").value = state.settings.minDeposit;
+      document.getElementById("minWdInput").value = state.settings.minWithdraw;
+      document.getElementById("bkashInput").value = state.settings.paymentNumbers.bkash;
+      document.getElementById("nagadInput").value = state.settings.paymentNumbers.nagad;
+      document.getElementById("rocketInput").value = state.settings.paymentNumbers.rocket;
+      document.getElementById("supportWaInput").value = state.support?.whatsapp || "";
+      document.getElementById("supportTgInput").value = state.support?.telegram || "";
+      document.getElementById("supportHoursInput").value = state.support?.hours || "24/7 Live Agent";
+
+      const wrBox = document.getElementById("walletRemovalBox");
+      if (wrBox) {
+        const reqs = Array.isArray(state.walletRemovalRequests) ? state.walletRemovalRequests : [];
+        const gws = Array.isArray(state.gateways) ? state.gateways : [];
+        const reqHtml = reqs.length
+          ? reqs.map(r => `
+            <div style="padding:10px;border-radius:10px;background:rgba(30,41,59,0.55);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:800;font-size:0.84rem;">${r.method} (${r.accountType}) • <span style="color:#67e8f9;">${r.number}</span></div>
+                <div style="font-size:0.7rem;color:var(--text-secondary);">User: ${r.userName} • ${r.createdAt || ""}</div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span class="badge ${r.status === "REMOVED" ? "badge-verified" : r.status === "REJECTED" ? "badge-rejected" : "badge-pending"}">${r.status}</span>
+                ${r.status === "PENDING" ? `
+                  <button type="button" class="btn btn-danger btn-sm" onclick="removeWalletByAdmin('${r.walletId}', '${r.id}')">Remove Wallet</button>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="rejectWalletRemovalReq('${r.id}')">Keep</button>
+                ` : ""}
+              </div>
+            </div>
+          `).join("")
+          : `<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:10px;">কোনো ওয়ালেট রিমুভ রিকোয়েস্ট নেই</div>`;
+
+        const gwHtml = gws.length
+          ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(148,163,184,0.14);">
+              <div style="font-size:0.76rem;font-weight:700;color:#93c5fd;margin-bottom:6px;">Active User Wallets (${gws.length})</div>
+              ${gws.map(g => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:10px;background:rgba(15,23,42,0.7);margin-bottom:6px;">
+                  <span style="font-size:0.8rem;font-weight:700;">${g.method} (${g.accountType || "Personal"}) • ${g.number}</span>
+                  <button type="button" class="btn btn-danger btn-sm" onclick="removeWalletByAdmin('${g.id}', '')">Remove</button>
+                </div>
+              `).join("")}
+            </div>`
+          : `<div style="font-size:0.76rem;color:var(--text-secondary);margin-top:6px;">বর্তমানে কোনো ওয়ালেট যুক্ত নেই।</div>`;
+
+        wrBox.innerHTML = reqHtml + gwHtml;
+      }
+    }
+
+    function removeWalletByAdmin(walletId, reqId) {
+      state.gateways = (state.gateways || []).filter(g => g.id !== walletId);
+      if (reqId) {
+        const r = (state.walletRemovalRequests || []).find(item => item.id === reqId);
+        if (r) r.status = "REMOVED";
+      }
+      pushSupabase();
+      renderConsole();
+      showToast("ওয়ালেট সফলভাবে রিমুভ করা হয়েছে");
+    }
+
+    function rejectWalletRemovalReq(reqId) {
+      const r = (state.walletRemovalRequests || []).find(item => item.id === reqId);
+      if (r) r.status = "REJECTED";
+      pushSupabase();
+      renderConsole();
+      showToast("রিকোয়েস্ট বাতিল করা হয়েছে");
+    }
+
+    readLocal();
+    pullSupabase();
+  </script>
+</body>
+</html>
