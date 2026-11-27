@@ -1221,6 +1221,7 @@
         backPhoto: "",
         selfiePhoto: ""
       },
+      kycRequests: [],
       gateways: [],
       walletRemovalRequests: [],
       deposits: [],
@@ -1269,6 +1270,7 @@
           },
           support: { ...structuredClone(defaultState.support), ...(parsed.support || {}) },
           kyc: { ...structuredClone(defaultState.kyc), ...(parsed.kyc || {}) },
+          kycRequests: Array.isArray(parsed.kycRequests) ? parsed.kycRequests : [],
           gateways: Array.isArray(parsed.gateways) ? parsed.gateways : [],
           walletRemovalRequests: Array.isArray(parsed.walletRemovalRequests) ? parsed.walletRemovalRequests : [],
           deposits: Array.isArray(parsed.deposits) ? parsed.deposits : [],
@@ -1347,6 +1349,7 @@
           name: state.user.name,
           email: state.user.email,
           phone: state.user.phone,
+          kycStatus: (state.kyc && state.kyc.status) || state.registeredUsers[idx].kycStatus || "NOT_SUBMITTED",
           balance: Number(state.user.balance) || 0,
           totalDeposit: Number(state.user.totalDeposit) || 0,
           totalWithdraw: Number(state.user.totalWithdraw) || 0
@@ -1355,23 +1358,44 @@
     }
 
     function applyCloudUserAndDeposits(cfg) {
-      if (Array.isArray(cfg.registeredUsers) && cfg.registeredUsers.length) {
-        const localMap = new Map();
-        (state.registeredUsers || []).forEach(u => {
-          if (u && u.email) localMap.set(u.email.trim().toLowerCase(), u);
-        });
+      const deletedEmails = new Set(
+        (Array.isArray(cfg.deletedUserEmails) ? cfg.deletedUserEmails : [])
+          .map(e => String(e || "").trim().toLowerCase())
+          .filter(Boolean)
+      );
+
+      if (Array.isArray(cfg.registeredUsers)) {
+        const cloudMap = new Map();
         cfg.registeredUsers.forEach(cu => {
           if (cu && cu.email) {
             const key = cu.email.trim().toLowerCase();
-            const prev = localMap.get(key) || {};
-            localMap.set(key, { ...prev, ...cu });
+            if (!deletedEmails.has(key)) {
+              cloudMap.set(key, cu);
+            }
           }
         });
-        state.registeredUsers = Array.from(localMap.values());
+        // Preserve newly registered local users that haven't pushed yet, unless deleted by admin
+        (state.registeredUsers || []).forEach(lu => {
+          if (lu && lu.email) {
+            const key = lu.email.trim().toLowerCase();
+            if (!deletedEmails.has(key) && !cloudMap.has(key)) {
+              cloudMap.set(key, lu);
+            }
+          }
+        });
+        state.registeredUsers = Array.from(cloudMap.values());
       }
 
       if (state.user && state.user.email) {
         const uEmail = state.user.email.trim().toLowerCase();
+        if (deletedEmails.has(uEmail)) {
+          state.user = null;
+          state.sessionExpiresAt = 0;
+          state.kyc = { status: "NOT_SUBMITTED", fullName: "", nidNumber: "", dob: "", frontPhoto: "", backPhoto: "", selfiePhoto: "" };
+          showToast("আপনার অ্যাকাউন্টটি অ্যাডমিন কর্তৃক ডিলিট করা হয়েছে।");
+          switchView("auth");
+          return;
+        }
         const cloudAcc = (state.registeredUsers || []).find(u => (u.email || "").trim().toLowerCase() === uEmail);
         if (cloudAcc) {
           state.user.name = cloudAcc.name || state.user.name;
@@ -1379,6 +1403,17 @@
           state.user.balance = Number(cloudAcc.balance) || 0;
           state.user.totalDeposit = Number(cloudAcc.totalDeposit) || 0;
           state.user.totalWithdraw = Number(cloudAcc.totalWithdraw) || 0;
+          if (cloudAcc.kycStatus === "VERIFIED") {
+            state.kyc.status = "VERIFIED";
+          } else if (cloudAcc.kycStatus === "PENDING_REVIEW" && state.kyc.status !== "VERIFIED") {
+            state.kyc.status = "PENDING_REVIEW";
+          }
+        }
+        if (Array.isArray(cfg.kycRequests)) {
+          const myReq = cfg.kycRequests.find(r => String(r.userEmail || "").trim().toLowerCase() === uEmail);
+          if (myReq) {
+            state.kyc.status = myReq.status || state.kyc.status;
+          }
         }
       }
 
@@ -1405,6 +1440,7 @@
           partners: state.partners,
           support: state.support,
           kyc: state.kyc,
+          kycRequests: state.kycRequests || [],
           gateways: state.gateways,
           walletRemovalRequests: state.walletRemovalRequests,
           deposits: state.deposits,
@@ -1446,17 +1482,53 @@
     }
 
     async function pushKycToSupabase(k) {
-      if (!sbClient || !k) return;
+      if (!k) return;
+      const uEmail = (state.user && state.user.email) ? state.user.email.trim().toLowerCase() : (k.userEmail || "");
+      const uName = (state.user && state.user.name) ? state.user.name : (k.userName || k.fullName || "User");
+      const uPhone = (state.user && state.user.phone) ? state.user.phone : "";
+      k.userEmail = uEmail;
+      k.userName = uName;
+
+      if (!Array.isArray(state.kycRequests)) state.kycRequests = [];
+      const reqEntry = {
+        id: "KYC-" + Date.now().toString().slice(-6),
+        userEmail: uEmail,
+        userName: uName,
+        userPhone: uPhone,
+        fullName: k.fullName || uName,
+        nidNumber: k.nidNumber || "",
+        dob: k.dob || "",
+        status: "PENDING_REVIEW",
+        submittedAt: new Date().toLocaleString("bn-BD")
+      };
+
+      const existingIdx = uEmail
+        ? state.kycRequests.findIndex(r => String(r.userEmail || "").trim().toLowerCase() === uEmail)
+        : -1;
+      if (existingIdx >= 0) {
+        state.kycRequests[existingIdx] = { ...state.kycRequests[existingIdx], ...reqEntry };
+      } else {
+        state.kycRequests.unshift(reqEntry);
+      }
+
+      if (Array.isArray(state.registeredUsers) && uEmail) {
+        const uAcc = state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === uEmail);
+        if (uAcc) uAcc.kycStatus = "PENDING_REVIEW";
+      }
+
+      saveState(true);
+      await syncConfigToSupabase();
+      if (!sbClient) return;
       try {
         await sbClient.from("kyc_submissions").upsert({
-          id: "primary_agent_kyc",
+          id: uEmail ? ("kyc_" + uEmail.replace(/[^a-z0-9]/g, "_")) : "primary_agent_kyc",
           full_name: k.fullName,
           nid_number: k.nidNumber,
           dob: k.dob,
           front_photo_url: k.frontPhoto,
           back_photo_url: k.backPhoto,
           selfie_photo_url: k.selfiePhoto,
-          status: k.status,
+          status: "PENDING_REVIEW",
           updated_at: new Date().toISOString()
         });
       } catch (e) {
@@ -1510,8 +1582,8 @@
           if (cfg.support) {
             state.support = { ...state.support, ...cfg.support };
           }
-          if (cfg.kyc && cfg.kyc.status !== "NOT_SUBMITTED") {
-            state.kyc = { ...state.kyc, ...cfg.kyc };
+          if (Array.isArray(cfg.kycRequests)) {
+            state.kycRequests = cfg.kycRequests;
           }
           if (Array.isArray(cfg.gateways)) {
             state.gateways = cfg.gateways;
@@ -1624,6 +1696,20 @@
         totalDeposit: Number(matched.totalDeposit) || 0,
         totalWithdraw: Number(matched.totalWithdraw) || 0
       };
+      const matchedEmail = (matched.email || "").trim().toLowerCase();
+      const myKycReq = (state.kycRequests || []).find(r => String(r.userEmail || "").trim().toLowerCase() === matchedEmail);
+      const resolvedKycStatus = (myKycReq && myKycReq.status) || matched.kycStatus || "NOT_SUBMITTED";
+      state.kyc = {
+        status: resolvedKycStatus,
+        fullName: (myKycReq && myKycReq.fullName) || matched.name || "",
+        nidNumber: (myKycReq && myKycReq.nidNumber) || "",
+        dob: (myKycReq && myKycReq.dob) || "",
+        frontPhoto: "",
+        backPhoto: "",
+        selfiePhoto: "",
+        userEmail: matchedEmail,
+        userName: matched.name || ""
+      };
       state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
       showToast("রেজিস্টারকৃত অ্যাকাউন্টে সফলভাবে লগইন হয়েছে!");
@@ -1653,6 +1739,7 @@
         email,
         phone,
         password,
+        kycStatus: "NOT_SUBMITTED",
         registeredAt: new Date().toLocaleString("bn-BD"),
         balance: 0,
         totalDeposit: 0,
@@ -1666,6 +1753,17 @@
         balance: 0,
         totalDeposit: 0,
         totalWithdraw: 0
+      };
+      state.kyc = {
+        status: "NOT_SUBMITTED",
+        fullName: newAcc.name,
+        nidNumber: "",
+        dob: "",
+        frontPhoto: "",
+        backPhoto: "",
+        selfiePhoto: "",
+        userEmail: newAcc.email,
+        userName: newAcc.name
       };
       state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
@@ -2264,6 +2362,8 @@
       state.kyc.fullName = document.getElementById("kycFullName").value.trim();
       state.kyc.nidNumber = document.getElementById("kycNidNumber").value.trim();
       state.kyc.dob = document.getElementById("kycDob").value;
+      state.kyc.userEmail = (state.user && state.user.email) ? state.user.email.trim().toLowerCase() : "";
+      state.kyc.userName = (state.user && state.user.name) ? state.user.name : state.kyc.fullName;
 
       const frontSrc = (document.getElementById("kycFrontImg")?.getAttribute("src") || state.kyc.frontPhoto || "").trim();
       const backSrc = (document.getElementById("kycBackImg")?.getAttribute("src") || state.kyc.backPhoto || "").trim();
@@ -2543,7 +2643,7 @@
     setInterval(() => {
       checkAndEnforceSession(false);
       loadFromSupabase();
-    }, 8000);
+    }, 3000);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         checkAndEnforceSession(false);
