@@ -1178,6 +1178,11 @@
           bkash: "01712345678",
           nagad: "01812345678",
           rocket: "01912345678"
+        },
+        paymentModes: {
+          bkash: "Send Money / Cash Out",
+          nagad: "Send Money / Cash Out",
+          rocket: "Send Money / Cash Out"
         }
       },
       partners: {
@@ -1194,6 +1199,7 @@
       },
       registeredUsers: [],
       user: null,
+      sessionExpiresAt: 0,
       balanceHidden: false,
       adminUnlocked: false,
       support: {
@@ -1217,7 +1223,8 @@
     };
 
     let state = loadState();
-    let activeView = "landing";
+    checkAndEnforceSession(true);
+    let activeView = state.user ? "dashboard" : "landing";
     let tickerIndex = 0;
 
     function loadState() {
@@ -1238,6 +1245,10 @@
             paymentNumbers: {
               ...structuredClone(defaultState.settings.paymentNumbers),
               ...((parsed.settings && parsed.settings.paymentNumbers) || {})
+            },
+            paymentModes: {
+              ...structuredClone(defaultState.settings.paymentModes),
+              ...((parsed.settings && parsed.settings.paymentModes) || {})
             }
           },
           partners: {
@@ -1249,11 +1260,35 @@
           gateways: Array.isArray(parsed.gateways) ? parsed.gateways : [],
           walletRemovalRequests: Array.isArray(parsed.walletRemovalRequests) ? parsed.walletRemovalRequests : [],
           deposits: Array.isArray(parsed.deposits) ? parsed.deposits : [],
-          transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
+          transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+          sessionExpiresAt: Number(parsed.sessionExpiresAt) || 0
         };
       } catch (e) {
         return structuredClone(defaultState);
       }
+    }
+
+    const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
+
+    function checkAndEnforceSession(silent) {
+      if (!state.user) return false;
+      const now = Date.now();
+      if (!state.sessionExpiresAt) {
+        state.sessionExpiresAt = now + SESSION_DURATION_MS;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+        return true;
+      }
+      if (now >= Number(state.sessionExpiresAt)) {
+        state.user = null;
+        state.sessionExpiresAt = 0;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+        if (!silent) {
+          showToast("সেশন টাইম শেষ হয়ে গেছে, আবার লগইন করুন");
+          switchView("auth");
+        }
+        return false;
+      }
+      return true;
     }
 
     function sanitizeDemoGateways() {
@@ -1276,9 +1311,69 @@
       }
     }
 
+    function syncActiveUserWithRegistered() {
+      if (!Array.isArray(state.registeredUsers)) state.registeredUsers = [];
+      if (!state.user || !state.user.email) return;
+      const uEmail = state.user.email.trim().toLowerCase();
+      const idx = state.registeredUsers.findIndex(u => (u.email || "").trim().toLowerCase() === uEmail);
+      if (idx >= 0) {
+        state.registeredUsers[idx] = {
+          ...state.registeredUsers[idx],
+          name: state.user.name,
+          email: state.user.email,
+          phone: state.user.phone,
+          balance: Number(state.user.balance) || 0,
+          totalDeposit: Number(state.user.totalDeposit) || 0,
+          totalWithdraw: Number(state.user.totalWithdraw) || 0
+        };
+      }
+    }
+
+    function applyCloudUserAndDeposits(cfg) {
+      if (Array.isArray(cfg.registeredUsers) && cfg.registeredUsers.length) {
+        const localMap = new Map();
+        (state.registeredUsers || []).forEach(u => {
+          if (u && u.email) localMap.set(u.email.trim().toLowerCase(), u);
+        });
+        cfg.registeredUsers.forEach(cu => {
+          if (cu && cu.email) {
+            const key = cu.email.trim().toLowerCase();
+            const prev = localMap.get(key) || {};
+            localMap.set(key, { ...prev, ...cu });
+          }
+        });
+        state.registeredUsers = Array.from(localMap.values());
+      }
+
+      if (state.user && state.user.email) {
+        const uEmail = state.user.email.trim().toLowerCase();
+        const cloudAcc = (state.registeredUsers || []).find(u => (u.email || "").trim().toLowerCase() === uEmail);
+        if (cloudAcc) {
+          state.user.name = cloudAcc.name || state.user.name;
+          state.user.phone = cloudAcc.phone || state.user.phone;
+          state.user.balance = Number(cloudAcc.balance) || 0;
+          state.user.totalDeposit = Number(cloudAcc.totalDeposit) || 0;
+          state.user.totalWithdraw = Number(cloudAcc.totalWithdraw) || 0;
+        }
+      }
+
+      if (Array.isArray(state.deposits) && Array.isArray(state.transactions)) {
+        const validIds = new Set(state.deposits.map(d => d.id));
+        state.deposits.forEach(dep => {
+          const tx = state.transactions.find(t => t.id === dep.id);
+          if (tx && dep.status && tx.status !== dep.status) {
+            tx.status = dep.status;
+          }
+        });
+        // Remove deposit transactions deleted by admin
+        state.transactions = state.transactions.filter(t => !(String(t.id || "").startsWith("DEP-") && !validIds.has(t.id)));
+      }
+    }
+
     async function syncConfigToSupabase() {
       if (!sbClient) return;
       try {
+        syncActiveUserWithRegistered();
         const sharedPayload = {
           brand: state.brand,
           settings: state.settings,
@@ -1287,7 +1382,8 @@
           kyc: state.kyc,
           gateways: state.gateways,
           walletRemovalRequests: state.walletRemovalRequests,
-          deposits: state.deposits
+          deposits: state.deposits,
+          registeredUsers: state.registeredUsers
         };
         await sbClient.from("platform_config").upsert({
           id: "global_settings",
@@ -1364,6 +1460,10 @@
               paymentNumbers: {
                 ...state.settings.paymentNumbers,
                 ...(cfg.settings.paymentNumbers || {})
+              },
+              paymentModes: {
+                ...state.settings.paymentModes,
+                ...(cfg.settings.paymentModes || {})
               }
             };
           }
@@ -1385,12 +1485,13 @@
           if (Array.isArray(cfg.walletRemovalRequests)) {
             state.walletRemovalRequests = cfg.walletRemovalRequests;
           }
-          if (Array.isArray(cfg.deposits) && cfg.deposits.length) {
+          if (Array.isArray(cfg.deposits)) {
             state.deposits = cfg.deposits;
           }
+          applyCloudUserAndDeposits(cfg);
           saveState(true);
           sanitizeDemoGateways();
-    renderAll();
+          renderAll();
         }
       } catch (e) {
         console.warn("Supabase initial fetch skipped:", e);
@@ -1489,6 +1590,7 @@
         totalDeposit: Number(matched.totalDeposit) || 0,
         totalWithdraw: Number(matched.totalWithdraw) || 0
       };
+      state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
       showToast("রেজিস্টারকৃত অ্যাকাউন্টে সফলভাবে লগইন হয়েছে!");
       switchView("dashboard");
@@ -1530,6 +1632,7 @@
         totalDeposit: 0,
         totalWithdraw: 0
       };
+      state.sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
       saveState();
       showToast("রেজিস্ট্রেশন সম্পন্ন হয়েছে! এখন এই জিমেইল দিয়ে লগইন করতে পারবেন।");
       switchView("dashboard");
@@ -1537,6 +1640,7 @@
 
     function logoutUser() {
       state.user = null;
+      state.sessionExpiresAt = 0;
       saveState();
       showToast("লগআউট করা হয়েছে");
       switchView("landing");
@@ -1609,7 +1713,7 @@
         </div>
 
         <div class="glass-subcard" style="padding:14px;margin-bottom:14px;">
-          <div style="font-size:0.75rem;color:var(--text-secondary);">Official ${draftDepositMethod} Number (Send Money / Cash Out)</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);">Official ${draftDepositMethod} Number (${(state.settings.paymentModes && state.settings.paymentModes[draftDepositMethod.toLowerCase()]) || "Send Money / Cash Out"})</div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;">
             <strong id="copyTargetNumber" style="font-size:1.1rem;letter-spacing:0.04em;color:#67e8f9;">${currentNum}</strong>
             <button type="button" class="btn btn-cyan btn-sm" onclick="copyPaymentNumber('${currentNum}')">Copy</button>
@@ -1689,6 +1793,8 @@
       const id = "DEP-" + Date.now().toString().slice(-6);
       const record = {
         id,
+        userEmail: (state.user && state.user.email) ? state.user.email.trim().toLowerCase() : "",
+        userName: (state.user && state.user.name) ? state.user.name : "User",
         method: draftDepositMethod,
         amount,
         ref: ref || "N/A",
@@ -1722,6 +1828,14 @@
         if (state.user) {
           state.user.balance = (Number(state.user.balance) || 0) + Number(dep.amount);
           state.user.totalDeposit = (Number(state.user.totalDeposit) || 0) + Number(dep.amount);
+        }
+        if (Array.isArray(state.registeredUsers)) {
+          const targetEmail = (dep.userEmail || state.user?.email || "").trim().toLowerCase();
+          const uAcc = state.registeredUsers.find(u => (u.email || "").trim().toLowerCase() === targetEmail);
+          if (uAcc) {
+            uAcc.balance = (Number(uAcc.balance) || 0) + Number(dep.amount);
+            uAcc.totalDeposit = (Number(uAcc.totalDeposit) || 0) + Number(dep.amount);
+          }
         }
         const tx = state.transactions.find(t => t.id === depId);
         if (tx) tx.status = "VERIFIED";
@@ -1817,7 +1931,10 @@
       const agentComm = state.gateways
         .filter(g => (g.accountType || "Personal") === "Agent")
         .reduce((sum, g) => sum + (Number(g.commission) || 0), 0);
-      const totalComm = personalComm + agentComm;
+      const verifiedDepositTotal = (state.deposits || [])
+        .filter(d => d.status === "VERIFIED")
+        .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      const totalComm = personalComm + agentComm + verifiedDepositTotal;
 
       const listHtml = state.gateways.length
         ? state.gateways.map(g => {
@@ -2191,7 +2308,10 @@
 
       document.getElementById("statTotalDeposit").textContent = formatBDT(u?.totalDeposit || 0);
       document.getElementById("statTotalWithdraw").textContent = formatBDT(u?.totalWithdraw || 0);
-      const gwComm = state.gateways.reduce((sum, g) => sum + (Number(g.commission) || 0), 0);
+      const verifiedDepSum = (state.deposits || [])
+        .filter(d => d.status === "VERIFIED")
+        .reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      const gwComm = state.gateways.reduce((sum, g) => sum + (Number(g.commission) || 0), 0) + verifiedDepSum;
       document.getElementById("statGatewayCommission").textContent = formatBDT(gwComm);
       const pendingDeps = state.deposits.filter(d => d.status === "PENDING").length;
       document.getElementById("statPendingCount").textContent = String(pendingDeps);
@@ -2333,10 +2453,24 @@
       renderDashboard();
     }
 
-    renderAll();
+    if (state.user) {
+      switchView("dashboard");
+    } else {
+      switchView("landing");
+    }
     loadFromSupabase();
     rotateLiveTicker();
     setInterval(rotateLiveTicker, 3200);
+    setInterval(() => {
+      checkAndEnforceSession(false);
+      loadFromSupabase();
+    }, 8000);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        checkAndEnforceSession(false);
+        loadFromSupabase();
+      }
+    });
   </script>
 </body>
 </html>
