@@ -1183,6 +1183,11 @@
           bkash: "Send Money / Cash Out",
           nagad: "Send Money / Cash Out",
           rocket: "Send Money / Cash Out"
+        },
+        depositInstructions: {
+          bkash: "",
+          nagad: "",
+          rocket: ""
         }
       },
       partners: {
@@ -1252,6 +1257,10 @@
             paymentModes: {
               ...structuredClone(defaultState.settings.paymentModes),
               ...((parsed.settings && parsed.settings.paymentModes) || {})
+            },
+            depositInstructions: {
+              ...structuredClone(defaultState.settings.depositInstructions),
+              ...((parsed.settings && parsed.settings.depositInstructions) || {})
             }
           },
           partners: {
@@ -1472,6 +1481,10 @@
               paymentModes: {
                 ...state.settings.paymentModes,
                 ...(cfg.settings.paymentModes || {})
+              },
+              depositInstructions: {
+                ...state.settings.depositInstructions,
+                ...(cfg.settings.depositInstructions || {})
               }
             };
           }
@@ -1726,8 +1739,8 @@
             <strong id="copyTargetNumber" style="font-size:1.1rem;letter-spacing:0.04em;color:#67e8f9;">${currentNum}</strong>
             <button type="button" class="btn btn-cyan btn-sm" onclick="copyPaymentNumber('${currentNum}')">Copy</button>
           </div>
-          <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:8px;">
-            ন্যূনতম ডিপোজিট: <strong>৳${minDep}</strong>। টাকা পাঠিয়ে স্ক্রিনশট সাবমিট করুন; ভেরিফাই হলে ওয়ালেটে যুক্ত হবে।
+          <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:8px;white-space:pre-line;">
+            ${((state.settings.depositInstructions && state.settings.depositInstructions[draftDepositMethod.toLowerCase()]) || "").trim() || `ন্যূনতম ডিপোজিট: <strong>৳${minDep}</strong>। টাকা পাঠিয়ে স্ক্রিনশট সাবমিট করুন; ভেরিফাই হলে ওয়ালেটে যুক্ত হবে।`}
           </div>
         </div>
 
