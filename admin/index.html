@@ -577,6 +577,15 @@
       if (icon) icon.textContent = show ? "🙈" : "👁️";
     }
 
+    const ADMIN_AUTH_KEY = "nexa_admin_unlocked_v1";
+
+    function applyUnlockedUi() {
+      unlocked = true;
+      document.getElementById("pinLockCard").style.display = "none";
+      document.getElementById("consoleCard").style.display = "block";
+      renderConsole();
+    }
+
     function unlockConsole(e) {
       e.preventDefault();
       const entered = document.getElementById("pinInput").value.trim();
@@ -584,15 +593,14 @@
         showToast("ভুল PIN! সঠিক PIN দিন");
         return;
       }
-      unlocked = true;
-      document.getElementById("pinLockCard").style.display = "none";
-      document.getElementById("consoleCard").style.display = "block";
-      renderConsole();
+      try { sessionStorage.setItem(ADMIN_AUTH_KEY, "1"); } catch (err) {}
+      applyUnlockedUi();
       pullSupabase();
     }
 
     function lockConsole() {
       unlocked = false;
+      try { sessionStorage.removeItem(ADMIN_AUTH_KEY); } catch (err) {}
       document.getElementById("pinInput").value = "";
       document.getElementById("consoleCard").style.display = "none";
       document.getElementById("pinLockCard").style.display = "block";
@@ -1077,7 +1085,12 @@
     }
 
     readLocal();
-    pullSupabase();
+    if (sessionStorage.getItem(ADMIN_AUTH_KEY) === "1") {
+      applyUnlockedUi();
+    }
+    pullSupabase().then(() => {
+      if (unlocked && !isUserEditingSettings()) renderConsole();
+    });
     setInterval(() => {
       if (unlocked && !isUserEditingSettings()) pullSupabase();
     }, 3000);
