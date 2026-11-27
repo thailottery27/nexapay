@@ -1316,7 +1316,20 @@
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch (e) {
-        showToast("Storage limit reached — try smaller images");
+        try {
+          // Fallback if localStorage quota is full due to large images: keep lightweight state locally and push to cloud
+          const slimState = {
+            ...state,
+            deposits: (state.deposits || []).map(d => ({ ...d, screenshot: "" })),
+            kyc: {
+              ...(state.kyc || {}),
+              frontPhoto: "",
+              backPhoto: "",
+              selfiePhoto: ""
+            }
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(slimState));
+        } catch (e2) {}
       }
       if (!skipCloud) {
         syncConfigToSupabase();
@@ -1640,6 +1653,7 @@
         email,
         phone,
         password,
+        registeredAt: new Date().toLocaleString("bn-BD"),
         balance: 0,
         totalDeposit: 0,
         totalWithdraw: 0
@@ -1706,7 +1720,41 @@
     function readFileAsDataUrl(file, callback) {
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = () => callback(reader.result);
+      reader.onload = () => {
+        const rawUrl = reader.result;
+        if (typeof rawUrl !== "string" || !rawUrl.startsWith("data:image/")) {
+          callback(rawUrl);
+          return;
+        }
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const maxDim = 640;
+            let w = img.width || maxDim;
+            let h = img.height || maxDim;
+            if (w > maxDim || h > maxDim) {
+              if (w >= h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const compressed = canvas.toDataURL("image/jpeg", 0.72);
+            callback(compressed.length < rawUrl.length ? compressed : rawUrl);
+          } catch (e) {
+            callback(rawUrl);
+          }
+        };
+        img.onerror = () => callback(rawUrl);
+        img.src = rawUrl;
+      };
       reader.readAsDataURL(file);
     }
 
@@ -2211,11 +2259,19 @@
       });
     }
 
-    function submitKycForm(e) {
+    async function submitKycForm(e) {
       e.preventDefault();
       state.kyc.fullName = document.getElementById("kycFullName").value.trim();
       state.kyc.nidNumber = document.getElementById("kycNidNumber").value.trim();
       state.kyc.dob = document.getElementById("kycDob").value;
+
+      const frontSrc = (document.getElementById("kycFrontImg")?.getAttribute("src") || state.kyc.frontPhoto || "").trim();
+      const backSrc = (document.getElementById("kycBackImg")?.getAttribute("src") || state.kyc.backPhoto || "").trim();
+      const selfieSrc = (document.getElementById("kycSelfieImg")?.getAttribute("src") || state.kyc.selfiePhoto || "").trim();
+
+      if (frontSrc) state.kyc.frontPhoto = frontSrc;
+      if (backSrc) state.kyc.backPhoto = backSrc;
+      if (selfieSrc) state.kyc.selfiePhoto = selfieSrc;
 
       if (!state.kyc.nidNumber || !state.kyc.frontPhoto || !state.kyc.backPhoto || !state.kyc.selfiePhoto) {
         showToast("NID নম্বর, সামনে-পিছনের ছবি এবং আবেদনকারীর ছবি দিন");
@@ -2224,7 +2280,7 @@
 
       state.kyc.status = "PENDING_REVIEW";
       saveState();
-      pushKycToSupabase(state.kyc);
+      await pushKycToSupabase(state.kyc);
       closeModal();
       showToast("KYC ডকুমেন্ট ও ছবি সাবমিট হয়েছে!");
       renderDashboard();
